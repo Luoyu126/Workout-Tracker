@@ -1,0 +1,322 @@
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from app.coins.schemas import (
+    CoinRuleCreateRequest,
+    CoinRuleUpdateRequest,
+    CoinTransactionCreateRequest,
+)
+from app.common.enums import (
+    AttendanceStatus,
+    CoinRuleTrigger,
+    CoinTransactionType,
+    EventType,
+    MembershipRole,
+    NotificationType,
+    enum_value,
+)
+from app.models import Attendance, CoinRule, CoinTransaction, Event, User
+from app.notifications.service import create_user_notification
+from app.teams.service import get_active_membership, require_team_role
+
+
+class CoinRuleNotFoundError(Exception):
+    pass
+
+
+class CoinRuleConflictError(Exception):
+    pass
+
+
+class CoinTransactionConflictError(Exception):
+    pass
+
+
+def reward_amount_for_attendance(session: Session, event: Event, attendance_status: AttendanceStatus) -> int:
+    trigger_type: CoinRuleTrigger | None = None
+    if attendance_status == AttendanceStatus.late:
+        trigger_type = CoinRuleTrigger.late_attendance
+    elif attendance_status == AttendanceStatus.present and event.type == EventType.training:
+        trigger_type = CoinRuleTrigger.training_attendance
+    elif attendance_status == AttendanceStatus.present and event.type == EventType.match:
+        trigger_type = CoinRuleTrigger.match_attendance
+
+    if trigger_type is None:
+        return 0
+
+    amount = session.scalar(
+        select(CoinRule.amount)
+        .where(
+            CoinRule.team_id == event.team_id,
+            CoinRule.trigger_type == trigger_type,
+            CoinRule.is_active.is_(True),
+        )
+        .order_by(CoinRule.updated_at.desc(), CoinRule.created_at.desc())
+        .limit(1)
+    )
+    return amount or 0
+
+
+def list_coin_rules(session: Session, team_id: UUID, user: User) -> list[CoinRule]:
+    get_active_membership(session, team_id, user.id)
+    return list(
+        session.scalars(
+            select(CoinRule).where(CoinRule.team_id == team_id).order_by(CoinRule.trigger_type, CoinRule.name)
+        )
+    )
+
+
+def create_coin_rule(
+    session: Session,
+    team_id: UUID,
+    user: User,
+    payload: CoinRuleCreateRequest,
+) -> CoinRule:
+    require_team_role(session, team_id, user.id, MembershipRole.captain)
+    if payload.id is not None:
+        existing = session.get(CoinRule, payload.id)
+        if existing is not None:
+            if (
+                existing.team_id != team_id
+                or existing.created_by != user.id
+                or existing.name != payload.name
+                or enum_value(existing.trigger_type) != enum_value(payload.trigger_type)
+                or existing.amount != payload.amount
+                or existing.config != payload.config
+                or existing.is_active != payload.is_active
+            ):
+                raise CoinRuleConflictError("Coin rule id already belongs to another request")
+            return existing
+    rule = CoinRule(team_id=team_id, created_by=user.id, **payload.model_dump())
+    session.add(rule)
+    session.commit()
+    session.refresh(rule)
+    return rule
+
+
+def update_coin_rule(
+    session: Session,
+    rule_id: UUID,
+    user: User,
+    payload: CoinRuleUpdateRequest,
+) -> CoinRule:
+    rule = session.get(CoinRule, rule_id)
+    if rule is None:
+        raise CoinRuleNotFoundError("Coin rule not found")
+    require_team_role(session, rule.team_id, user.id, MembershipRole.captain)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(rule, field, value)
+    session.commit()
+    session.refresh(rule)
+    return rule
+
+
+def coin_balance(session: Session, team_id: UUID, user: User, target_user_id: UUID | None = None) -> int:
+    get_active_membership(session, team_id, user.id)
+    user_id = target_user_id or user.id
+    if target_user_id is not None and target_user_id != user.id:
+        require_team_role(session, team_id, user.id, MembershipRole.captain)
+    return session.scalar(
+        select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
+            CoinTransaction.team_id == team_id,
+            CoinTransaction.user_id == user_id,
+        )
+    ) or 0
+
+
+def list_coin_transactions(
+    session: Session,
+    team_id: UUID,
+    user: User,
+    target_user_id: UUID | None = None,
+    transaction_type: CoinTransactionType | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+) -> list[CoinTransaction]:
+    get_active_membership(session, team_id, user.id)
+    user_id = target_user_id or user.id
+    if target_user_id is not None and target_user_id != user.id:
+        require_team_role(session, team_id, user.id, MembershipRole.captain)
+    stmt = select(CoinTransaction).where(
+        CoinTransaction.team_id == team_id,
+        CoinTransaction.user_id == user_id,
+    )
+    if transaction_type is not None:
+        stmt = stmt.where(CoinTransaction.type == transaction_type)
+    if created_after is not None:
+        stmt = stmt.where(CoinTransaction.created_at >= created_after)
+    if created_before is not None:
+        stmt = stmt.where(CoinTransaction.created_at <= created_before)
+    return list(
+        session.scalars(
+            stmt.order_by(CoinTransaction.created_at.desc())
+        )
+    )
+
+
+def create_manual_coin_transaction(
+    session: Session,
+    team_id: UUID,
+    user: User,
+    payload: CoinTransactionCreateRequest,
+) -> CoinTransaction:
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
+    get_active_membership(session, team_id, payload.user_id)
+
+    existing = session.get(CoinTransaction, payload.id)
+    if existing is not None:
+        if (
+            existing.team_id != team_id
+            or existing.user_id != payload.user_id
+            or existing.amount != payload.amount
+            or existing.type != payload.type
+            or existing.reason != payload.reason
+            or existing.metadata_ != payload.metadata
+        ):
+            raise CoinTransactionConflictError("Coin transaction id already belongs to another request")
+        return existing
+
+    transaction = CoinTransaction(
+        id=payload.id,
+        team_id=team_id,
+        user_id=payload.user_id,
+        amount=payload.amount,
+        type=payload.type,
+        reason=payload.reason,
+        reference_type="manual_adjustment" if payload.type == CoinTransactionType.admin_adjustment else "other_reward",
+        reference_id=payload.id,
+        created_by=user.id,
+        metadata_=payload.metadata,
+    )
+    session.add(transaction)
+    session.flush()
+    create_user_notification(
+        session,
+        payload.user_id,
+        team_id,
+        NotificationType.coin_earned,
+        title="金币已调整" if payload.type == CoinTransactionType.admin_adjustment else "金币奖励",
+        body=(
+            f"管理员调整 {payload.amount} 金币。"
+            if payload.type == CoinTransactionType.admin_adjustment
+            else f"获得额外奖励 {payload.amount} 金币。"
+        ),
+        reference_type="coin_transaction",
+        reference_id=transaction.id,
+    )
+    session.commit()
+    session.refresh(transaction)
+    return transaction
+
+
+def current_event_reward_total(session: Session, event: Event, attendance: Attendance) -> int:
+    return session.scalar(
+        select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
+            CoinTransaction.team_id == event.team_id,
+            CoinTransaction.user_id == attendance.user_id,
+            CoinTransaction.type == CoinTransactionType.attendance_reward,
+            or_(
+                (
+                    (CoinTransaction.reference_type == "event")
+                    & (CoinTransaction.reference_id == event.id)
+                ),
+                (
+                    (CoinTransaction.reference_type == "attendance_correction")
+                    & (CoinTransaction.reference_id == attendance.id)
+                ),
+            ),
+        )
+    ) or 0
+
+
+def issue_initial_attendance_reward(
+    session: Session,
+    event: Event,
+    attendance: Attendance,
+    created_by: UUID,
+) -> CoinTransaction | None:
+    amount = reward_amount_for_attendance(session, event, attendance.status)
+    if amount == 0:
+        return None
+
+    existing = session.scalar(
+        select(CoinTransaction).where(
+            CoinTransaction.team_id == event.team_id,
+            CoinTransaction.user_id == attendance.user_id,
+            CoinTransaction.type == CoinTransactionType.attendance_reward,
+            CoinTransaction.reference_type == "event",
+            CoinTransaction.reference_id == event.id,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    transaction = CoinTransaction(
+        team_id=event.team_id,
+        user_id=attendance.user_id,
+        amount=amount,
+        type=CoinTransactionType.attendance_reward,
+        reason=f"Attendance reward for {event.title}",
+        reference_type="event",
+        reference_id=event.id,
+        created_by=created_by,
+        metadata_={"attendance_id": str(attendance.id), "status": enum_value(attendance.status)},
+    )
+    session.add(transaction)
+    session.flush()
+    create_user_notification(
+        session,
+        attendance.user_id,
+        event.team_id,
+        NotificationType.coin_earned,
+        title="金币已到账",
+        body=f"{event.title} 出勤奖励 {amount} 金币。",
+        reference_type="coin_transaction",
+        reference_id=transaction.id,
+    )
+    return transaction
+
+
+def reconcile_completed_attendance_reward(
+    session: Session,
+    event: Event,
+    attendance: Attendance,
+    created_by: UUID,
+) -> CoinTransaction | None:
+    target_amount = reward_amount_for_attendance(session, event, attendance.status)
+    current_amount = current_event_reward_total(session, event, attendance)
+    delta = target_amount - current_amount
+    if delta == 0:
+        return None
+
+    transaction = CoinTransaction(
+        team_id=event.team_id,
+        user_id=attendance.user_id,
+        amount=delta,
+        type=CoinTransactionType.attendance_reward,
+        reason=f"Attendance correction for {event.title}",
+        reference_type="attendance_correction",
+        reference_id=attendance.id,
+        created_by=created_by,
+        metadata_={"event_id": str(event.id), "status": enum_value(attendance.status)},
+    )
+    session.add(transaction)
+    session.flush()
+    if delta > 0:
+        body = f"{event.title} 考勤修正补发 {delta} 金币。"
+    else:
+        body = f"{event.title} 考勤修正追回 {abs(delta)} 金币。"
+    create_user_notification(
+        session,
+        attendance.user_id,
+        event.team_id,
+        NotificationType.coin_earned,
+        title="金币已更新",
+        body=body,
+        reference_type="coin_transaction",
+        reference_id=transaction.id,
+    )
+    return transaction

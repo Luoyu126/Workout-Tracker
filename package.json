@@ -1,0 +1,50 @@
+{
+  "name": "workout-tracker",
+  "private": true,
+  "workspaces": [
+    "apps/mobile",
+    "packages/api-client"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "backend:migrate": "cd backend && python3 -m alembic upgrade head",
+    "dev:backend": "cd backend && python3 -m uvicorn app.main:app --reload",
+    "dev:backend:lan": "cd backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev:mobile": "npm --workspace apps/mobile run start",
+    "mobile": "npm --workspace apps/mobile run start",
+    "mobile:lint": "npm --workspace apps/mobile run lint",
+    "mobile:release-env:check": "npm --workspace apps/mobile run release-env:check",
+    "mobile:smoke": "npm --workspace apps/mobile run smoke",
+    "mobile:test": "npm --workspace apps/mobile run test",
+    "mobile:typecheck": "npm --workspace apps/mobile run typecheck",
+    "backend:test": "cd backend && python3 -m pytest",
+    "backend:demo-flow": "cd backend && python3 -m scripts.demo_flow",
+    "backend:load-check": "cd backend && python3 -m scripts.load_check",
+    "backend:smoke": "cd backend && python3 -m scripts.smoke",
+    "backend:release-env:check": "cd backend && python3 -m scripts.check_release_env",
+    "backend:seed-device-smoke": "cd backend && python3 -m scripts.seed_device_smoke",
+    "backend:migration:sql": "cd backend && python3 -m alembic upgrade head --sql",
+    "backend:lint": "cd backend && python3 -m ruff check .",
+    "backend:typecheck": "cd backend && python3 -m mypy app",
+    "backend:bootstrap": "cd backend && python3 -m scripts.bootstrap",
+    "api-client:generate": "npm --workspace packages/api-client run generate",
+    "api-client:check": "npm --workspace packages/api-client run check",
+    "e2e:maestro:check": "command -v maestro >/dev/null || (echo \"Maestro CLI is not installed. Install it before running npm run e2e:maestro.\" && exit 1)",
+    "e2e:maestro": "maestro test e2e/maestro",
+    "e2e:device-report:create": "node e2e/maestro/create-device-smoke-report.mjs",
+    "e2e:device-report:check": "node e2e/maestro/check-device-smoke-report.mjs",
+    "deps:check": "npm ls --omit=dev --all --silent > /tmp/workout-tracker-npm-ls.log || (cat /tmp/workout-tracker-npm-ls.log && exit 1)",
+    "security:audit": "npm audit --omit=dev --audit-level=critical",
+    "release:check:preview": "npm run verify && npm run backend:release-env:check -- production && npm run mobile:release-env:check -- preview",
+    "release:check:production": "npm run verify && npm run backend:release-env:check -- production && npm run mobile:release-env:check -- production",
+    "clean:python": "find backend -type d \\( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name '*.egg-info' \\) -prune -exec rm -r {} + && find . -maxdepth 1 -type d \\( -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name '*.egg-info' \\) -prune -exec rm -r {} +",
+    "clean": "npm run clean:python",
+    "verify": "npm run deps:check && npm run backend:lint && npm run backend:typecheck && npm run backend:test && npm run backend:demo-flow && npm run backend:load-check && npm run backend:smoke && npm run backend:migration:sql && npm run api-client:check && npm run mobile:lint && npm run mobile:typecheck && npm run mobile:smoke && npm run mobile:test"
+  },
+  "overrides": {
+    "expo": "57.0.13",
+    "tar": "7.5.22"
+  }
+}

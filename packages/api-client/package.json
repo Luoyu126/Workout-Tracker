@@ -1,0 +1,12 @@
+{
+  "name": "@workout-tracker/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "cd ../../backend && python3 -m scripts.export_openapi ../packages/api-client/openapi.json && python3 -m scripts.generate_api_client ../packages/api-client/openapi.json ../packages/api-client/src/generated.ts",
+    "check": "cd ../../backend && python3 -m scripts.export_openapi ../packages/api-client/openapi.json --check && python3 -m scripts.generate_api_client ../packages/api-client/openapi.json ../packages/api-client/src/generated.ts --check"
+  }
+}

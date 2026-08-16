@@ -1,0 +1,1 @@
+"""Workout Tracker backend application."""

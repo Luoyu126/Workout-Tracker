@@ -1,0 +1,35 @@
+appId: com.chenyy.workouttracker
+---
+- launchApp:
+    clearState: true
+- assertVisible: "球队首页"
+- assertVisible: "下一场活动"
+- assertVisible: "显示语言: zh-CN"
+- tapOn: "显示语言: zh-CN"
+- assertVisible: "Team Home"
+- assertVisible: "Display language: en"
+- tapOn: "Display language: en"
+- assertVisible: "球队首页"
+- assertVisible: "显示语言: zh-CN"
+- tapOn: "登录"
+- assertVisible: "姓名"
+- assertVisible: "学号，可选"
+- assertVisible: "邮箱"
+- assertVisible: "密码"
+- assertVisible: "注册"
+- back
+- tapOn: "个人资料"
+- assertVisible: "个人资料"
+- assertVisible: "姓名"
+- assertVisible: "学号"
+- assertVisible: "头像 URL，可留空"
+- back
+- tapOn: "我的球队"
+- assertVisible: "我的球队"
+- assertVisible: "加载球队"
+- back
+- tapOn: "收件箱"
+- assertVisible: "收件箱"
+- assertVisible: "球队公告"
+- assertVisible: "球队 UUID"
+- assertVisible: "加载通知"
