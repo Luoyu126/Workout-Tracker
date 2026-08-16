@@ -25,3 +25,4 @@ backend/htmlcov/
 apps/mobile/.expo/
 apps/mobile/web-build/
 e2e/maestro/device-smoke-report-*.md
+!e2e/maestro/device-smoke-report-template.md
