@@ -4,13 +4,13 @@
 
 Build a mobile-first team management MVP with a frontend/backend separated, modular-monolith architecture.
 
-The domain model in [database.md](database.md) is authoritative. Application code, API schemas, migrations, tests, and shared enums must use its 15 entities and exact enum values.
+The domain model in [database.md](database.md) is authoritative. Application code, API schemas, migrations, tests, and shared enums must use its entities and exact enum values.
 
 Core rules:
 
-- The mobile app is never authoritative for permissions, attendance, coin amounts, balances, inventory, or state transitions.
+- The mobile app is never authoritative for permissions, signup settlement, coin amounts, balances, inventory, or state transitions.
 - User identity and TeamMembership authorization are separate.
-- Signup intent and actual attendance are separate.
+- EventSignup is the source of truth for participation intent and completion rewards; there is no separate Attendance domain.
 - Coins are an immutable CoinTransaction ledger scoped to (user, team).
 - Match-only data uses MatchDetails and MatchLogEntry.
 - Redemption creation, coin deduction, and inventory deduction are atomic.
@@ -76,8 +76,7 @@ The backend is split by business capability while sharing one process and one Po
 - users: User, authentication identity synchronization, profile and device tokens.
 - organizations: Organization.
 - teams: Team, TeamMembership and team authorization.
-- events: Event, EventSignup, MatchDetails, MatchLogEntry, event lifecycle, publishing, modification, and deletion.
-- attendance: Attendance recording, correction, event completion attendance backfill, and reward/correction coordination.
+- events: Event, EventSignup, MatchDetails, MatchLogEntry, event lifecycle, publishing, modification, deletion, and completion with signup-based reward settlement.
 - coins: CoinRule, CoinTransaction and derived balance queries.
 - store: StoreItem, Redemption.
 - notifications: Notification and push delivery integration.
@@ -94,15 +93,14 @@ The V1 database contains exactly:
 4. TeamMembership
 5. Event
 6. EventSignup
-7. Attendance
-8. MatchDetails
-9. MatchLogEntry
-10. CoinRule
-11. CoinTransaction
-12. StoreItem
-13. Redemption
-14. Notification
-15. DeviceToken
+7. MatchDetails
+8. MatchLogEntry
+9. CoinRule
+10. CoinTransaction
+11. StoreItem
+12. Redemption
+13. Notification
+14. DeviceToken
 
 ### Canonical enums
 
@@ -112,9 +110,10 @@ The V1 database contains exactly:
 - Event type: training | match | other
 - Event status: draft | published | completed | cancelled
 - Signup status: going | not_going | maybe
-- Attendance status: present | late | absent | excused
 - Match entry type: goal | yellow_card | red_card | substitution
 - Match result: win | draw | loss
+- Coin rule trigger: training_signup | match_signup | manual
+- Coin transaction type: signup_reward | redemption | admin_adjustment | other_reward | refund
 - Redemption status: pending | fulfilled | cancelled | refunded
 - Device platform: ios | android
 
@@ -177,20 +176,16 @@ Completing an event must run in one database transaction:
 
 1. Lock the event row.
 2. Verify the event is published.
-3. Auto-create missing Attendance rows as absent for members who were eligible at `event.start_time`: `joined_at <= event.start_time` and either still active or `left_at >= event.start_time`.
-4. Validate final attendance and match details.
-5. Insert missing attendance reward CoinTransaction rows for present or late attendance according to active team CoinRule settings.
-6. Insert coin_earned notifications.
+3. Resolve members eligible at `event.start_time`: `joined_at <= event.start_time` and either still active or `left_at >= event.start_time`.
+4. Apply optional final match details for match events.
+5. For each eligible member, treat missing signup as `maybe`; for `going` signups, insert missing `signup_reward` CoinTransaction rows according to active team CoinRule settings (`training_signup` or `match_signup`).
+6. Insert coin_earned notifications for newly issued rewards.
 7. Set the event to completed.
-7. Commit.
+8. Commit.
 
-Repeated completion requests return the already completed result and must not issue duplicate rewards. Enforce one attendance reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
+The completion response includes `going_count` (eligible members with signup status `going`) and `reward_count` (newly written reward rows). Repeated completion requests return the already completed result with `reward_count` 0 and must not issue duplicate rewards. Enforce one signup reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
 
-Attendance upsert requires the target user to be an active team member for
-published events and for creating a new Attendance row. For completed events,
-captains/admins may still correct an existing Attendance row after the member
-later becomes inactive, so historical reward clawback/grant reconciliation
-remains possible without allowing new inactive-member attendance rows.
+There is no Attendance upsert or post-completion attendance correction path. Captains complete events to settle signup rewards; coin clawback for rewards is not driven by attendance edits.
 
 ### 6.2 Redemption
 
@@ -264,7 +259,6 @@ Workout-Tracker/
 │   │   ├── organizations/
 │   │   ├── teams/
 │   │   ├── events/
-│   │   ├── attendance/
 │   │   ├── coins/
 │   │   ├── store/
 │   │   ├── notifications/
@@ -297,7 +291,7 @@ packages/api-client exports generated endpoint metadata from the FastAPI OpenAPI
 Deliver:
 
 - Expo and FastAPI applications start locally.
-- PostgreSQL migrations create the 15 baseline entities.
+- PostgreSQL migrations create the 14 baseline entities.
 - Supabase token verification and User.auth_id synchronization work.
 - Health check and environment validation work.
 - A bootstrap script creates the initial organization, team, user, and admin membership.
@@ -345,25 +339,23 @@ Test:
 - Publish, update, and delete notification integration tests.
 - Hard-delete cascade and orphan-reference tests.
 
-### Phase 3 — Match logs, attendance and completion
+### Phase 3 — Match logs, signup board and completion
 
 Deliver:
 
 - Four match log entry types.
 - Polling-based live board.
 - Client-generated match log ids with idempotent retry handling.
-- Attendance management as an independent backend domain.
-- Atomic event completion, missing-attendance absent backfill, and reward generation.
-- Attendance correction after completion with coin grant or clawback; balances may become negative.
-- Event summary and attendance board.
+- Atomic event completion with signup-based reward generation (`going_count` / `reward_count`).
+- Event summary with signups and signup rewards.
+- Team signup board aggregating going/maybe/not_going rates for completed events.
 
 Test:
 
 - Conditional match log field validation.
 - Match log create idempotency and conflicting-id tests.
 - Non-match and completed-event rejection tests.
-- Attendance uniqueness tests.
-- Completion rollback, absent backfill, correction, clawback, and duplicate reward tests.
+- Completion rollback, signup-reward issuance, and duplicate reward tests.
 - Concurrent completion tests.
 
 ### Phase 4 — Coins and store
@@ -395,7 +387,7 @@ Deliver:
 
 Test:
 
-- Register → membership → publish event → signup → log match → attendance → complete → redeem.
+- Register → membership → publish event → signup → log match → complete → redeem.
 - iOS and Android physical-device smoke tests.
 - Permission and transaction regression suites.
 - Basic load tests for team home, Inbox and live board.

@@ -51,7 +51,6 @@ def bootstrap(
     admin_name: str,
     training_reward: int,
     match_reward: int,
-    late_reward: int,
 ) -> BootstrapResult:
     organization_name = required(organization_name, "BOOTSTRAP_ORG_NAME")
     organization_slug = required(organization_slug, "BOOTSTRAP_ORG_SLUG")
@@ -60,7 +59,6 @@ def bootstrap(
     admin_name = required(admin_name, "BOOTSTRAP_ADMIN_NAME")
     training_reward = non_negative(training_reward, "BOOTSTRAP_TRAINING_REWARD")
     match_reward = non_negative(match_reward, "BOOTSTRAP_MATCH_REWARD")
-    late_reward = non_negative(late_reward, "BOOTSTRAP_LATE_REWARD")
 
     organization = session.scalar(select(Organization).where(Organization.slug == organization_slug))
     if organization is None:
@@ -114,9 +112,8 @@ def bootstrap(
         membership.status = MembershipStatus.active
 
     default_rules = [
-        ("Training attendance", CoinRuleTrigger.training_attendance, training_reward),
-        ("Match attendance", CoinRuleTrigger.match_attendance, match_reward),
-        ("Late attendance", CoinRuleTrigger.late_attendance, late_reward),
+        ("Training signup", CoinRuleTrigger.training_signup, training_reward),
+        ("Match signup", CoinRuleTrigger.match_signup, match_reward),
     ]
     for name, trigger_type, amount in default_rules:
         rule = session.scalar(
@@ -152,7 +149,6 @@ def main() -> None:
             admin_name=settings.bootstrap_admin_name,
             training_reward=settings.bootstrap_training_reward,
             match_reward=settings.bootstrap_match_reward,
-            late_reward=settings.bootstrap_late_reward,
         )
         print(
             "Bootstrapped "

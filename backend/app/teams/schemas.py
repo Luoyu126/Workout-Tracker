@@ -105,5 +105,15 @@ class TeamHomeRead(BaseModel):
     captains: list[MembershipRead]
     member_count: int
     upcoming_events: list[dict[str, object]]
-    attendance_summary: dict[str, int]
+    signup_summary: dict[str, int]
     coin_summary: dict[str, int]
+
+
+class SignupBoardRow(BaseModel):
+    user_id: UUID
+    user: UserSummary | None = None
+    going: int
+    maybe: int
+    not_going: int
+    total: int
+    going_rate: float

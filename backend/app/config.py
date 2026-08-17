@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     bootstrap_admin_name: str = Field(default="Admin", alias="BOOTSTRAP_ADMIN_NAME")
     bootstrap_training_reward: int = Field(default=10, alias="BOOTSTRAP_TRAINING_REWARD")
     bootstrap_match_reward: int = Field(default=20, alias="BOOTSTRAP_MATCH_REWARD")
-    bootstrap_late_reward: int = Field(default=5, alias="BOOTSTRAP_LATE_REWARD")
     push_notifications_enabled: bool = Field(default=False, alias="PUSH_NOTIFICATIONS_ENABLED")
     expo_push_endpoint: str = Field(
         default="https://exp.host/--/api/v2/push/send",

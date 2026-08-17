@@ -202,10 +202,9 @@ export default function TeamHomeScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t("teamHome.attendanceSummary")}</Text>
             <Text style={styles.muted}>
-              {t("attendance.present")} {home.attendance_summary.present} · {t("attendance.late")}{" "}
-              {home.attendance_summary.late} · {t("attendance.absent")}{" "}
-              {home.attendance_summary.absent} · {t("attendance.excused")}{" "}
-              {home.attendance_summary.excused}
+              {t("signupBoard.going")} {home.signup_summary.going} · {t("signupBoard.maybe")}{" "}
+              {home.signup_summary.maybe} · {t("signupBoard.notGoing")}{" "}
+              {home.signup_summary.not_going}
             </Text>
           </View>
           <View style={styles.card}>
@@ -252,9 +251,9 @@ export default function TeamHomeScreen() {
               </Pressable>
             </Link>
           </View>
-          <Link href={{ pathname: "/teams/[teamId]/attendance-board", params: { teamId } }} asChild>
+          <Link href={{ pathname: "/teams/[teamId]/signup-board", params: { teamId } }} asChild>
             <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryText}>{t("teams.attendanceBoard")}</Text>
+              <Text style={styles.secondaryText}>{t("signupBoard.title")}</Text>
             </Pressable>
           </Link>
           <Link href={{ pathname: "/inbox", params: { teamId } }} asChild>
@@ -284,7 +283,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -295,12 +294,12 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
@@ -328,7 +327,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
     padding: 16
   },
@@ -343,7 +342,7 @@ const styles = StyleSheet.create({
   },
   metric: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     flex: 1,
     gap: 6,
     padding: 16
@@ -355,7 +354,7 @@ const styles = StyleSheet.create({
   },
   eventRow: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
     padding: 12
   },
@@ -366,7 +365,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     color: colors.text,
     fontSize: 16,
     minHeight: 48,
@@ -384,7 +383,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     flex: 1,
     minHeight: 44,
     justifyContent: "center",

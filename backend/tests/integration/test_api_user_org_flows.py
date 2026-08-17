@@ -11,16 +11,16 @@ from sqlalchemy.pool import StaticPool
 from app.common.auth import AuthClaims
 from app.common.database import Base
 from app.common.enums import (
-    AttendanceStatus,
     CoinTransactionType,
     EventStatus,
     EventType,
     MembershipRole,
     MembershipStatus,
+    SignupStatus,
     TeamStatus,
     UserStatus,
 )
-from app.models import Attendance, CoinTransaction, Event, Organization, Team, TeamMembership, User
+from app.models import CoinTransaction, Event, EventSignup, Organization, Team, TeamMembership, User
 from app.organizations.router import read_my_organizations
 from app.teams.router import read_team_home
 from app.users.router import current_user, read_current_user, sync_current_user, update_current_user
@@ -148,7 +148,7 @@ def test_organizations_router_lists_only_active_membership_active_team_orgs(sess
     assert organizations == [active_org]
 
 
-def test_team_home_returns_real_upcoming_attendance_and_coin_aggregates(session: Session) -> None:
+def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Session) -> None:
     user = User(auth_id=uuid4(), name="首页用户", email="home-user@example.com")
     captain = User(auth_id=uuid4(), name="首页队长", email="home-captain@example.com")
     organization = Organization(name="Home Org", slug=f"home-org-{uuid4().hex[:8]}")
@@ -197,17 +197,15 @@ def test_team_home_returns_real_upcoming_attendance_and_coin_aggregates(session:
     session.flush()
     session.add_all(
         [
-            Attendance(
+            EventSignup(
                 event_id=completed.id,
                 user_id=user.id,
-                status=AttendanceStatus.present,
-                recorded_by=captain.id,
+                status=SignupStatus.going,
             ),
-            Attendance(
+            EventSignup(
                 event_id=completed.id,
                 user_id=captain.id,
-                status=AttendanceStatus.late,
-                recorded_by=captain.id,
+                status=SignupStatus.maybe,
             ),
             CoinTransaction(
                 team_id=team.id,
@@ -235,11 +233,10 @@ def test_team_home_returns_real_upcoming_attendance_and_coin_aggregates(session:
     assert home["current_membership"].role == MembershipRole.member
     assert home["member_count"] == 2
     assert [event["title"] for event in home["upcoming_events"]] == ["明天训练"]
-    assert home["attendance_summary"] == {
-        "present": 1,
-        "late": 1,
-        "absent": 0,
-        "excused": 0,
+    assert home["signup_summary"] == {
+        "going": 1,
+        "maybe": 1,
+        "not_going": 0,
         "total": 2,
     }
     assert home["coin_summary"] == {"balance": 15, "team_ledger_total": 35}

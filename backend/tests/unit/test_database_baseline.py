@@ -12,6 +12,9 @@ from app.common.enums import EventStatus, NotificationType
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 INITIAL_MIGRATION = ROOT_DIR / "backend/migrations/versions/20260815_0001_initial.py"
+SIGNUP_REWARD_MIGRATION = (
+    ROOT_DIR / "backend/migrations/versions/20260817_0002_drop_attendance_signup_rewards.py"
+)
 
 EXPECTED_TABLE_COLUMNS = {
     "users": {
@@ -69,17 +72,6 @@ EXPECTED_TABLE_COLUMNS = {
         "event_id",
         "user_id",
         "status",
-        "note",
-        "created_at",
-        "updated_at",
-    },
-    "attendances": {
-        "id",
-        "event_id",
-        "user_id",
-        "status",
-        "recorded_by",
-        "recorded_at",
         "note",
         "created_at",
         "updated_at",
@@ -196,7 +188,7 @@ def _migration_create_table_block(migration_source: str, table_name: str) -> str
     return migration_source[start:next_table]
 
 
-def test_database_baseline_has_fifteen_tables() -> None:
+def test_database_baseline_has_fourteen_tables() -> None:
     assert set(Base.metadata.tables) == set(EXPECTED_TABLE_COLUMNS)
 
 
@@ -212,7 +204,6 @@ def test_database_baseline_keeps_required_uniqueness_guards() -> None:
     organizations = Base.metadata.tables["organizations"]
     memberships = Base.metadata.tables["team_memberships"]
     signups = Base.metadata.tables["event_signups"]
-    attendances = Base.metadata.tables["attendances"]
     match_details = Base.metadata.tables["match_details"]
     coin_transactions = Base.metadata.tables["coin_transactions"]
     device_tokens = Base.metadata.tables["device_tokens"]
@@ -223,7 +214,7 @@ def test_database_baseline_keeps_required_uniqueness_guards() -> None:
     assert organizations.columns["slug"].unique is True
     assert "uq_team_membership_team_user" in {constraint.name for constraint in memberships.constraints}
     assert "uq_event_signup_event_user" in {constraint.name for constraint in signups.constraints}
-    assert "uq_attendance_event_user" in {constraint.name for constraint in attendances.constraints}
+    assert "attendances" not in Base.metadata.tables
     assert match_details.columns["event_id"].unique is True
     assert "uq_coin_reward_team_user_event" in indexes
     assert indexes["uq_coin_reward_team_user_event"].unique is True
@@ -235,7 +226,6 @@ def test_database_baseline_keeps_required_uniqueness_guards() -> None:
 def test_database_baseline_keeps_event_dependent_foreign_keys_cascading() -> None:
     expected_event_dependents = {
         "event_signups": "event_id",
-        "attendances": "event_id",
         "match_details": "event_id",
         "match_log_entries": "event_id",
     }
@@ -347,7 +337,7 @@ def test_database_numeric_check_constraints_are_enforced_by_sqlite_runtime() -> 
 def test_database_baseline_locks_coin_transaction_partial_index_predicates() -> None:
     coin_transactions = Base.metadata.tables["coin_transactions"]
     expected_indexes = {
-        "uq_coin_reward_team_user_event": "type = 'attendance_reward' AND reference_type = 'event'",
+        "uq_coin_reward_team_user_event": "type = 'signup_reward' AND reference_type = 'event'",
         "uq_coin_refund_team_user_redemption": "type = 'refund' AND reference_type = 'redemption'",
     }
 
@@ -409,6 +399,22 @@ def test_initial_migration_preserves_database_baseline_guards() -> None:
         table_block = _migration_create_table_block(migration_source, table_name)
         for constraint in constraints:
             assert constraint in table_block
+
+
+def test_signup_reward_migration_drops_attendances_and_remaps_types() -> None:
+    migration_source = SIGNUP_REWARD_MIGRATION.read_text(encoding="utf-8")
+
+    for phrase in (
+        'op.drop_table("attendances")',
+        "training_signup",
+        "match_signup",
+        "late_attendance",
+        "signup_reward",
+        "attendance_reward",
+        'postgresql_where=sa.text("type = \'signup_reward\' AND reference_type = \'event\'")',
+        'op.drop_index("uq_coin_reward_team_user_event", table_name="coin_transactions")',
+    ):
+        assert phrase in migration_source
 
 
 def test_confirmed_event_and_notification_enums_are_present() -> None:

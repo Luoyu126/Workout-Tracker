@@ -63,11 +63,6 @@ export default function MatchSummaryScreen() {
               <Text style={styles.secondaryText}>{t("events.detail")}</Text>
             </Pressable>
           </Link>
-          <Link href={{ pathname: "/events/[eventId]/attendance", params: { eventId } }} asChild>
-            <Pressable accessibilityRole="button" style={styles.smallButton}>
-              <Text style={styles.secondaryText}>{t("attendance.title")}</Text>
-            </Pressable>
-          </Link>
           <Link href={{ pathname: "/events/[eventId]/live", params: { eventId } }} asChild>
             <Pressable accessibilityRole="button" style={styles.smallButton}>
               <Text style={styles.secondaryText}>{t("match.liveBoard")}</Text>
@@ -101,15 +96,15 @@ export default function MatchSummaryScreen() {
             </Text>
           </View>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t("match.attendanceSummary")}</Text>
-            {summary.attendance.length > 0 ? (
-              summary.attendance.map((row, index) => (
+            <Text style={styles.cardTitle}>{t("match.signupSummary")}</Text>
+            {summary.signups.length > 0 ? (
+              summary.signups.map((row, index) => (
                 <Text key={`${String(row.user_id)}-${index}`} style={styles.muted}>
-                  {row.user_id} · {t(`attendance.${row.status}`)}
+                  {row.user_id} · {t(`events.signup.${row.status}`)}
                 </Text>
               ))
             ) : (
-              <Text style={styles.muted}>{t("match.noAttendance")}</Text>
+              <Text style={styles.muted}>{t("match.noSignups")}</Text>
             )}
           </View>
           <View style={styles.card}>
@@ -134,7 +129,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -145,12 +140,12 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
@@ -168,7 +163,7 @@ const styles = StyleSheet.create({
   smallButton: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
     minWidth: "31%",

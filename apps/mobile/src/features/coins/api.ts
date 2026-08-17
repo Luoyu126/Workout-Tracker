@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 import { generateClientUuid } from "@/lib/uuid";
 
-export type CoinRuleTrigger = "training_attendance" | "match_attendance" | "late_attendance" | "manual";
+export type CoinRuleTrigger = "training_signup" | "match_signup" | "manual";
 
 export type CoinRule = {
   id: string;
@@ -27,7 +27,7 @@ export type CoinTransaction = {
   team_id: string;
   user_id: string;
   amount: number;
-  type: "attendance_reward" | "redemption" | "admin_adjustment" | "other_reward" | "refund";
+  type: "signup_reward" | "redemption" | "admin_adjustment" | "other_reward" | "refund";
   reason: string | null;
   reference_type: string | null;
   reference_id: string | null;

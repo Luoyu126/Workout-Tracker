@@ -10,13 +10,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.common.database import Base
 from app.common.enums import (
-    AttendanceStatus,
     CoinTransactionType,
     EventStatus,
     EventType,
     MatchEntryType,
     MembershipRole,
     MembershipStatus,
+    SignupStatus,
 )
 from app.events.match_router import (
     delete_match_log_route,
@@ -27,9 +27,9 @@ from app.events.match_router import (
 )
 from app.events.match_schemas import MatchLogEntryCreateRequest
 from app.models import (
-    Attendance,
     CoinTransaction,
     Event,
+    EventSignup,
     MatchDetails,
     Organization,
     Team,
@@ -301,35 +301,24 @@ def test_completed_match_logs_are_read_only_but_still_visible(session: Session) 
     assert read_live_board(event.id, captain, session)["counts"]["goal"] == 1
 
 
-def test_match_summary_includes_attendance_correction_reward_transactions(session: Session) -> None:
+def test_match_summary_includes_signups_and_signup_reward_transactions(session: Session) -> None:
     team, captain, player = _seed_team(session)
     event = _match_event(session, team, captain, EventStatus.completed)
-    attendance = Attendance(
+    signup = EventSignup(
         event_id=event.id,
         user_id=player.id,
-        status=AttendanceStatus.absent,
-        recorded_by=captain.id,
+        status=SignupStatus.going,
     )
-    session.add(attendance)
+    session.add(signup)
     session.flush()
     initial_reward = CoinTransaction(
         team_id=team.id,
         user_id=player.id,
         amount=20,
-        type=CoinTransactionType.attendance_reward,
-        reason="Initial match attendance reward",
+        type=CoinTransactionType.signup_reward,
+        reason="Initial match signup reward",
         reference_type="event",
         reference_id=event.id,
-        created_by=captain.id,
-    )
-    correction_clawback = CoinTransaction(
-        team_id=team.id,
-        user_id=player.id,
-        amount=-20,
-        type=CoinTransactionType.attendance_reward,
-        reason="Corrected to absent",
-        reference_type="attendance_correction",
-        reference_id=attendance.id,
         created_by=captain.id,
     )
     other_event = _match_event(session, team, captain, EventStatus.completed)
@@ -337,26 +326,25 @@ def test_match_summary_includes_attendance_correction_reward_transactions(sessio
         team_id=team.id,
         user_id=player.id,
         amount=99,
-        type=CoinTransactionType.attendance_reward,
+        type=CoinTransactionType.signup_reward,
         reason="Other match reward",
         reference_type="event",
         reference_id=other_event.id,
         created_by=captain.id,
     )
-    session.add_all([initial_reward, correction_clawback, unrelated_reward])
+    session.add_all([initial_reward, unrelated_reward])
     session.commit()
 
     summary = read_match_summary(event.id, captain, session)
 
-    assert summary["attendance"] == [
-        {"user_id": player.id, "status": "absent", "recorded_at": attendance.recorded_at}
+    assert summary["signups"] == [
+        {"user_id": player.id, "status": "going", "updated_at": signup.updated_at}
     ]
     assert [
         {"user_id": reward["user_id"], "amount": reward["amount"]}
         for reward in summary["rewards"]
     ] == [
         {"user_id": player.id, "amount": 20},
-        {"user_id": player.id, "amount": -20},
     ]
 
 

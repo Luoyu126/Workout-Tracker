@@ -88,17 +88,31 @@ export type TeamHome = {
     start_time: string;
     status: "published";
   }>;
-  attendance_summary: {
-    present: number;
-    late: number;
-    absent: number;
-    excused: number;
+  signup_summary: {
+    going: number;
+    maybe: number;
+    not_going: number;
     total: number;
   };
   coin_summary: {
     balance: number;
     team_ledger_total: number;
   };
+};
+
+export type SignupBoardRow = {
+  user_id: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+  } | null;
+  going: number;
+  maybe: number;
+  not_going: number;
+  total: number;
+  going_rate: number;
 };
 
 export type TeamUpdateInput = {
@@ -123,6 +137,21 @@ export function getMyOrganizations() {
 
 export function getTeamHome(teamId: string) {
   return apiRequest<TeamHome>(`/api/v1/teams/${teamId}/home`);
+}
+
+export function getTeamSignupBoard(
+  teamId: string,
+  options?: { startsAfter?: string | null; startsBefore?: string | null }
+) {
+  const params = new URLSearchParams();
+  if (options?.startsAfter) {
+    params.set("starts_after", options.startsAfter);
+  }
+  if (options?.startsBefore) {
+    params.set("starts_before", options.startsBefore);
+  }
+  const query = params.toString();
+  return apiRequest<SignupBoardRow[]>(`/api/v1/teams/${teamId}/signup-board${query ? `?${query}` : ""}`);
 }
 
 export function updateTeam(teamId: string, input: TeamUpdateInput) {

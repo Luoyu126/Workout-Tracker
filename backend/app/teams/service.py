@@ -1,20 +1,21 @@
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.common.enums import (
-    AttendanceStatus,
     EventStatus,
     MembershipRole,
     MembershipStatus,
+    SignupStatus,
     TeamStatus,
     UserStatus,
     enum_value,
 )
 from app.common.permissions import PermissionDeniedError, role_at_least
-from app.models import Attendance, CoinTransaction, Event, Team, TeamMembership, User
+from app.models import CoinTransaction, Event, EventSignup, Team, TeamMembership, User
 from app.teams.schemas import MembershipCreateRequest, MembershipUpdateRequest, TeamUpdateRequest
 
 
@@ -330,18 +331,18 @@ def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, ob
         )
     ]
 
-    attendance_summary: dict[str, int] = {status.value: 0 for status in AttendanceStatus}
-    attendance_rows = session.execute(
-        select(Attendance.status, func.count().label("count"))
-        .join(Event, Event.id == Attendance.event_id)
+    signup_summary: dict[str, int] = {status.value: 0 for status in SignupStatus}
+    signup_rows = session.execute(
+        select(EventSignup.status, func.count().label("count"))
+        .join(Event, Event.id == EventSignup.event_id)
         .where(Event.team_id == team_id, Event.status == EventStatus.completed)
-        .group_by(Attendance.status)
+        .group_by(EventSignup.status)
     )
-    total_attendance = 0
-    for status, count in attendance_rows:
-        attendance_summary[enum_value(status)] = count
-        total_attendance += count
-    attendance_summary["total"] = total_attendance
+    total_signups = 0
+    for status, count in signup_rows:
+        signup_summary[enum_value(status)] = count
+        total_signups += count
+    signup_summary["total"] = total_signups
 
     user_balance = session.scalar(
         select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
@@ -360,6 +361,84 @@ def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, ob
         "captains": captains,
         "member_count": member_count,
         "upcoming_events": upcoming_events,
-        "attendance_summary": attendance_summary,
+        "signup_summary": signup_summary,
         "coin_summary": {"balance": user_balance, "team_ledger_total": team_ledger_total},
     }
+
+
+def _user_summary(user: User | None) -> dict[str, object] | None:
+    if user is None:
+        return None
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "avatar_url": user.avatar_url,
+    }
+
+
+def signup_board(
+    session: Session,
+    team_id: UUID,
+    user: User,
+    starts_after: datetime | None = None,
+    starts_before: datetime | None = None,
+) -> list[dict[str, object]]:
+    get_active_membership(session, team_id, user.id)
+    stmt = select(Event).where(Event.team_id == team_id, Event.status == EventStatus.completed)
+    if starts_after is not None:
+        stmt = stmt.where(Event.start_time >= starts_after)
+    if starts_before is not None:
+        stmt = stmt.where(Event.start_time <= starts_before)
+    completed_events = list(session.scalars(stmt.order_by(Event.start_time)).all())
+
+    board: dict[UUID, dict[str, object]] = {}
+    for event in completed_events:
+        eligible_member_ids = list(
+            session.scalars(
+                select(TeamMembership.user_id).where(
+                    TeamMembership.team_id == event.team_id,
+                    TeamMembership.joined_at <= event.start_time,
+                    (
+                        (TeamMembership.status == MembershipStatus.active)
+                        | (
+                            TeamMembership.left_at.is_not(None)
+                            & (TeamMembership.left_at >= event.start_time)
+                        )
+                    ),
+                )
+            ).all()
+        )
+        signup_by_user_id = {
+            signup.user_id: signup.status
+            for signup in session.scalars(
+                select(EventSignup).where(EventSignup.event_id == event.id)
+            ).all()
+        }
+        for member_id in eligible_member_ids:
+            status = signup_by_user_id.get(member_id, SignupStatus.maybe)
+            row = board.setdefault(
+                member_id,
+                {
+                    "user_id": member_id,
+                    "user": None,
+                    "going": 0,
+                    "maybe": 0,
+                    "not_going": 0,
+                    "total": 0,
+                    "going_rate": 0.0,
+                },
+            )
+            row[enum_value(status)] = cast(int, row[enum_value(status)]) + 1
+            row["total"] = cast(int, row["total"]) + 1
+
+    user_ids = set(board.keys())
+    users_by_id = {
+        row.id: row for row in session.scalars(select(User).where(User.id.in_(user_ids))).all()
+    } if user_ids else {}
+    for user_id, row in board.items():
+        row["user"] = _user_summary(users_by_id.get(user_id))
+        total = cast(int, row["total"])
+        going = cast(int, row["going"])
+        row["going_rate"] = round(going / total, 4) if total > 0 else 0.0
+    return sorted(board.values(), key=lambda row: (-cast(float, row["going_rate"]), str(row["user_id"])))

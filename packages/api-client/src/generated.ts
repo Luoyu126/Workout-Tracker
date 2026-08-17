@@ -7,10 +7,6 @@ export const openApiInfo = {
 } as const;
 
 export const apiSchemaNames = [
-  "AttendanceBoardRow",
-  "AttendanceRead",
-  "AttendanceStatus",
-  "AttendanceUpsertRequest",
   "CoinBalanceRead",
   "CoinRuleCreateRequest",
   "CoinRuleRead",
@@ -54,6 +50,7 @@ export const apiSchemaNames = [
   "RedemptionCreateRequest",
   "RedemptionRead",
   "RedemptionStatus",
+  "SignupBoardRow",
   "SignupStatus",
   "StoreItemCreateRequest",
   "StoreItemRead",
@@ -145,28 +142,6 @@ export const apiEndpoints = [
     "path": "/api/v1/events/{event_id}",
     "requestBody": "EventUpdateRequest",
     "response": "EventRead",
-    "statusCodes": [
-      200,
-      422
-    ]
-  },
-  {
-    "operationId": "read_attendance_api_v1_events__event_id__attendance_get",
-    "method": "GET",
-    "path": "/api/v1/events/{event_id}/attendance",
-    "requestBody": null,
-    "response": "AttendanceRead[]",
-    "statusCodes": [
-      200,
-      422
-    ]
-  },
-  {
-    "operationId": "put_attendance_api_v1_events__event_id__attendance__user_id__put",
-    "method": "PUT",
-    "path": "/api/v1/events/{event_id}/attendance/{user_id}",
-    "requestBody": "AttendanceUpsertRequest",
-    "response": "AttendanceRead",
     "statusCodes": [
       200,
       422
@@ -425,17 +400,6 @@ export const apiEndpoints = [
     ]
   },
   {
-    "operationId": "read_attendance_board_api_v1_teams__team_id__attendance_board_get",
-    "method": "GET",
-    "path": "/api/v1/teams/{team_id}/attendance-board",
-    "requestBody": null,
-    "response": "AttendanceBoardRow[]",
-    "statusCodes": [
-      200,
-      422
-    ]
-  },
-  {
     "operationId": "read_coin_rules_api_v1_teams__team_id__coin_rules_get",
     "method": "GET",
     "path": "/api/v1/teams/{team_id}/coin-rules",
@@ -628,6 +592,17 @@ export const apiEndpoints = [
     "path": "/api/v1/teams/{team_id}/redemptions/manage",
     "requestBody": null,
     "response": "RedemptionRead[]",
+    "statusCodes": [
+      200,
+      422
+    ]
+  },
+  {
+    "operationId": "read_signup_board_api_v1_teams__team_id__signup_board_get",
+    "method": "GET",
+    "path": "/api/v1/teams/{team_id}/signup-board",
+    "requestBody": null,
+    "response": "SignupBoardRow[]",
     "statusCodes": [
       200,
       422

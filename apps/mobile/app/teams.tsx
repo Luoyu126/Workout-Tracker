@@ -125,9 +125,9 @@ export default function TeamsScreen() {
               <Text style={styles.secondaryText}>{t("teams.events")}</Text>
             </Pressable>
           </Link>
-          <Link href={{ pathname: "/teams/[teamId]/attendance-board", params: { teamId: team.id } }} asChild>
+          <Link href={{ pathname: "/teams/[teamId]/signup-board", params: { teamId: team.id } }} asChild>
             <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryText}>{t("teams.attendanceBoard")}</Text>
+              <Text style={styles.secondaryText}>{t("signupBoard.title")}</Text>
             </Pressable>
           </Link>
           <Link href={{ pathname: "/teams/[teamId]/store", params: { teamId: team.id } }} asChild>
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -161,18 +161,18 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
     padding: 16
   },
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   organizationRow: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 3,
     padding: 12
   },
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
     marginTop: 4

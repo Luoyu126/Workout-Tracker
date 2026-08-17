@@ -206,11 +206,6 @@ export default function LiveBoardScreen() {
       />
       {eventId ? (
         <View style={styles.grid}>
-          <Link href={{ pathname: "/events/[eventId]/attendance", params: { eventId } }} asChild>
-            <Pressable accessibilityRole="button" style={styles.smallButton}>
-              <Text style={styles.secondaryText}>{t("attendance.title")}</Text>
-            </Pressable>
-          </Link>
           <Link href={{ pathname: "/events/[eventId]/summary", params: { eventId } }} asChild>
             <Pressable accessibilityRole="button" style={styles.smallButton}>
               <Text style={styles.secondaryText}>{t("match.summary")}</Text>
@@ -361,7 +356,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -372,12 +367,12 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
@@ -398,7 +393,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     color: colors.text,
     fontSize: 16,
     minHeight: 48,
@@ -407,7 +402,7 @@ const styles = StyleSheet.create({
   smallButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 42,
     justifyContent: "center",
     minWidth: "48%",
@@ -419,7 +414,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 48,
     justifyContent: "center"
   },
@@ -430,15 +425,15 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     alignItems: "center",
-    backgroundColor: "#7f1d1d",
-    borderRadius: 8,
+    backgroundColor: colors.dangerMuted,
+    borderRadius: 12,
     minHeight: 42,
     justifyContent: "center",
     marginTop: 4
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
     padding: 16
   },

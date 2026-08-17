@@ -14,7 +14,7 @@ const config: ExpoConfig = {
   android: {
     package: "com.chenyy.workouttracker",
     adaptiveIcon: {
-      backgroundColor: "#101114"
+      backgroundColor: "#0B1220"
     }
   },
   plugins: ["expo-router", "expo-localization", "expo-secure-store", "expo-notifications"],

@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,6 +13,7 @@ from app.teams.schemas import (
     MembershipCreateRequest,
     MembershipRead,
     MembershipUpdateRequest,
+    SignupBoardRow,
     TeamHomeRead,
     TeamRead,
     TeamUpdateRequest,
@@ -29,6 +31,7 @@ from app.teams.service import (
     list_member_candidates,
     list_members,
     list_my_teams,
+    signup_board,
     update_member,
     update_team,
 )
@@ -86,6 +89,20 @@ def read_team_home(
 ) -> dict[str, object]:
     try:
         return build_team_home(session, team_id, user)
+    except Exception as exc:
+        raise _to_http_error(exc) from exc
+
+
+@router.get("/teams/{team_id}/signup-board", response_model=list[SignupBoardRow])
+def read_signup_board(
+    team_id: UUID,
+    starts_after: datetime | None = Query(default=None),
+    starts_before: datetime | None = Query(default=None),
+    user: User = Depends(current_user),
+    session: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    try:
+        return signup_board(session, team_id, user, starts_after, starts_before)
     except Exception as exc:
         raise _to_http_error(exc) from exc
 

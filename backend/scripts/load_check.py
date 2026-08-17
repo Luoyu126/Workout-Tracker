@@ -13,7 +13,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.common.database import Base
 from app.common.enums import (
-    AttendanceStatus,
     CoinTransactionType,
     EventStatus,
     EventType,
@@ -21,12 +20,13 @@ from app.common.enums import (
     MembershipRole,
     MembershipStatus,
     NotificationType,
+    SignupStatus,
 )
 from app.events.match_service import live_board
 from app.models import (
-    Attendance,
     CoinTransaction,
     Event,
+    EventSignup,
     MatchDetails,
     MatchLogEntry,
     Notification,
@@ -138,26 +138,27 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
     session.flush()
     session.add(MatchDetails(event_id=match.id, opponent="Load United"))
 
-    attendance_rows: list[Attendance] = []
+    signup_rows: list[EventSignup] = []
     coin_rows: list[CoinTransaction] = []
     for index, event in enumerate(completed_events):
-        status = AttendanceStatus.present if index % 3 else AttendanceStatus.late
-        attendance_rows.append(
-            Attendance(event_id=event.id, user_id=player.id, status=status, recorded_by=captain.id)
+        status = SignupStatus.going if index % 3 else SignupStatus.maybe
+        signup_rows.append(
+            EventSignup(event_id=event.id, user_id=player.id, status=status)
         )
-        coin_rows.append(
-            CoinTransaction(
-                team_id=team.id,
-                user_id=player.id,
-                amount=10,
-                type=CoinTransactionType.attendance_reward,
-                reason="Load reward",
-                reference_type="event",
-                reference_id=event.id,
-                created_by=captain.id,
+        if status == SignupStatus.going:
+            coin_rows.append(
+                CoinTransaction(
+                    team_id=team.id,
+                    user_id=player.id,
+                    amount=10,
+                    type=CoinTransactionType.signup_reward,
+                    reason="Load reward",
+                    reference_type="event",
+                    reference_id=event.id,
+                    created_by=captain.id,
+                )
             )
-        )
-    session.add_all(attendance_rows)
+    session.add_all(signup_rows)
     session.add_all(coin_rows)
 
     notifications = [
@@ -201,9 +202,9 @@ def run_load_check() -> dict[str, object]:
         assert team_home is not None
         assert team_home["member_count"] == 32
         team_home_upcoming_events = cast(list[dict[str, Any]], team_home["upcoming_events"])
-        team_home_attendance_summary = cast(dict[str, int], team_home["attendance_summary"])
+        team_home_signup_summary = cast(dict[str, int], team_home["signup_summary"])
         assert len(team_home_upcoming_events) == 5
-        assert team_home_attendance_summary["total"] == 12
+        assert team_home_signup_summary["total"] == 12
 
         notifications = []
         unread = 0

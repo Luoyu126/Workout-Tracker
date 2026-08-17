@@ -1,169 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AttendanceBoardRow": {
-        "properties": {
-          "absent": {
-            "title": "Absent",
-            "type": "integer"
-          },
-          "attendance_rate": {
-            "title": "Attendance Rate",
-            "type": "number"
-          },
-          "excused": {
-            "title": "Excused",
-            "type": "integer"
-          },
-          "late": {
-            "title": "Late",
-            "type": "integer"
-          },
-          "present": {
-            "title": "Present",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          },
-          "user": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/UserSummary"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "user_id": {
-            "format": "uuid",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "present",
-          "late",
-          "absent",
-          "excused",
-          "total",
-          "attendance_rate"
-        ],
-        "title": "AttendanceBoardRow",
-        "type": "object"
-      },
-      "AttendanceRead": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "event_id": {
-            "format": "uuid",
-            "title": "Event Id",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "recorded_at": {
-            "format": "date-time",
-            "title": "Recorded At",
-            "type": "string"
-          },
-          "recorded_by": {
-            "format": "uuid",
-            "title": "Recorded By",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AttendanceStatus"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "user": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/UserSummary"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "user_id": {
-            "format": "uuid",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "event_id",
-          "user_id",
-          "status",
-          "recorded_by",
-          "recorded_at",
-          "note",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "AttendanceRead",
-        "type": "object"
-      },
-      "AttendanceStatus": {
-        "enum": [
-          "present",
-          "late",
-          "absent",
-          "excused"
-        ],
-        "title": "AttendanceStatus",
-        "type": "string"
-      },
-      "AttendanceUpsertRequest": {
-        "properties": {
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AttendanceStatus"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "AttendanceUpsertRequest",
-        "type": "object"
-      },
       "CoinBalanceRead": {
         "properties": {
           "balance": {
@@ -315,9 +152,8 @@
       },
       "CoinRuleTrigger": {
         "enum": [
-          "training_attendance",
-          "match_attendance",
-          "late_attendance",
+          "training_signup",
+          "match_signup",
           "manual"
         ],
         "title": "CoinRuleTrigger",
@@ -534,7 +370,7 @@
       },
       "CoinTransactionType": {
         "enum": [
-          "attendance_reward",
+          "signup_reward",
           "redemption",
           "admin_adjustment",
           "other_reward",
@@ -622,14 +458,14 @@
       },
       "EventCompletionRead": {
         "properties": {
-          "attendance_count": {
-            "title": "Attendance Count",
-            "type": "integer"
-          },
           "event_id": {
             "format": "uuid",
             "title": "Event Id",
             "type": "string"
+          },
+          "going_count": {
+            "title": "Going Count",
+            "type": "integer"
           },
           "reward_count": {
             "title": "Reward Count",
@@ -643,7 +479,7 @@
         "required": [
           "event_id",
           "status",
-          "attendance_count",
+          "going_count",
           "reward_count"
         ],
         "title": "EventCompletionRead",
@@ -1563,14 +1399,6 @@
       },
       "MatchSummaryRead": {
         "properties": {
-          "attendance": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Attendance",
-            "type": "array"
-          },
           "counts": {
             "additionalProperties": {
               "type": "integer"
@@ -1598,13 +1426,21 @@
             },
             "title": "Rewards",
             "type": "array"
+          },
+          "signups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Signups",
+            "type": "array"
           }
         },
         "required": [
           "event",
           "match_details",
           "counts",
-          "attendance",
+          "signups",
           "rewards"
         ],
         "title": "MatchSummaryRead",
@@ -2175,6 +2011,55 @@
         "title": "RedemptionStatus",
         "type": "string"
       },
+      "SignupBoardRow": {
+        "properties": {
+          "going": {
+            "title": "Going",
+            "type": "integer"
+          },
+          "going_rate": {
+            "title": "Going Rate",
+            "type": "number"
+          },
+          "maybe": {
+            "title": "Maybe",
+            "type": "integer"
+          },
+          "not_going": {
+            "title": "Not Going",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "going",
+          "maybe",
+          "not_going",
+          "total",
+          "going_rate"
+        ],
+        "title": "SignupBoardRow",
+        "type": "object"
+      },
       "SignupStatus": {
         "enum": [
           "going",
@@ -2451,13 +2336,6 @@
       },
       "TeamHomeRead": {
         "properties": {
-          "attendance_summary": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Attendance Summary",
-            "type": "object"
-          },
           "captains": {
             "items": {
               "$ref": "#/components/schemas/MembershipRead"
@@ -2479,6 +2357,13 @@
             "title": "Member Count",
             "type": "integer"
           },
+          "signup_summary": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Signup Summary",
+            "type": "object"
+          },
           "team": {
             "$ref": "#/components/schemas/TeamRead"
           },
@@ -2497,7 +2382,7 @@
           "captains",
           "member_count",
           "upcoming_events",
-          "attendance_summary",
+          "signup_summary",
           "coin_summary"
         ],
         "title": "TeamHomeRead",
@@ -3223,126 +3108,6 @@
         ]
       }
     },
-    "/api/v1/events/{event_id}/attendance": {
-      "get": {
-        "operationId": "read_attendance_api_v1_events__event_id__attendance_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "event_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Event Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AttendanceRead"
-                  },
-                  "title": "Response Read Attendance Api V1 Events  Event Id  Attendance Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Read Attendance",
-        "tags": [
-          "attendance"
-        ]
-      }
-    },
-    "/api/v1/events/{event_id}/attendance/{user_id}": {
-      "put": {
-        "operationId": "put_attendance_api_v1_events__event_id__attendance__user_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "event_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Event Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "User Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AttendanceUpsertRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttendanceRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Put Attendance",
-        "tags": [
-          "attendance"
-        ]
-      }
-    },
     "/api/v1/events/{event_id}/complete": {
       "post": {
         "operationId": "post_complete_event_api_v1_events__event_id__complete_post",
@@ -3404,7 +3169,7 @@
         ],
         "summary": "Post Complete Event",
         "tags": [
-          "attendance"
+          "events"
         ]
       }
     },
@@ -4578,92 +4343,6 @@
         "summary": "Post Team Announcement",
         "tags": [
           "notifications"
-        ]
-      }
-    },
-    "/api/v1/teams/{team_id}/attendance-board": {
-      "get": {
-        "operationId": "read_attendance_board_api_v1_teams__team_id__attendance_board_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "team_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Team Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "starts_after",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Starts After"
-            }
-          },
-          {
-            "in": "query",
-            "name": "starts_before",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Starts Before"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AttendanceBoardRow"
-                  },
-                  "title": "Response Read Attendance Board Api V1 Teams  Team Id  Attendance Board Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Read Attendance Board",
-        "tags": [
-          "attendance"
         ]
       }
     },
@@ -5904,6 +5583,92 @@
         "summary": "Read Team Redemptions",
         "tags": [
           "store"
+        ]
+      }
+    },
+    "/api/v1/teams/{team_id}/signup-board": {
+      "get": {
+        "operationId": "read_signup_board_api_v1_teams__team_id__signup_board_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Team Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "starts_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Starts After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "starts_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Starts Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SignupBoardRow"
+                  },
+                  "title": "Response Read Signup Board Api V1 Teams  Team Id  Signup Board Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Signup Board",
+        "tags": [
+          "teams"
         ]
       }
     },

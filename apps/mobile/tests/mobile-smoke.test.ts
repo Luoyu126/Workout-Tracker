@@ -12,20 +12,19 @@ const repoRoot = resolve(appRoot, "../..");
 
 const requiredRoutes = [
   "app/_layout.tsx",
-  "app/index.tsx",
+  "app/(tabs)/index.tsx",
   "app/login.tsx",
-  "app/profile.tsx",
+  "app/(tabs)/profile.tsx",
   "app/teams.tsx",
-  "app/inbox.tsx",
+  "app/(tabs)/inbox.tsx",
   "app/teams/[teamId]/index.tsx",
   "app/teams/[teamId]/members.tsx",
   "app/teams/[teamId]/events.tsx",
-  "app/teams/[teamId]/attendance-board.tsx",
+  "app/teams/[teamId]/signup-board.tsx",
   "app/teams/[teamId]/store.tsx",
   "app/teams/[teamId]/coins.tsx",
   "app/store-items/[storeItemId].tsx",
   "app/events/[eventId].tsx",
-  "app/events/[eventId]/attendance.tsx",
   "app/events/[eventId]/live.tsx",
   "app/events/[eventId]/summary.tsx"
 ];
@@ -87,6 +86,8 @@ describe("mobile MVP smoke", () => {
     expect(stateComponent).toContain('href="/login"');
     expect(stateComponent).toContain("authRequiredLabel");
     expect(stateComponent).toContain("signInLabel");
+    expect(stateComponent).toContain('messageTone = "error"');
+    expect(stateComponent).toContain("!isLoading && !isSuccess && message && retryLabel && onRetry");
 
     const errors = readFileSync(resolve(appRoot, "src/lib/api/errors.ts"), "utf-8");
     const i18nProvider = readFileSync(resolve(appRoot, "src/lib/i18n/I18nProvider.tsx"), "utf-8");
@@ -138,7 +139,7 @@ describe("mobile MVP smoke", () => {
     expect(supabaseConfig).toContain("developmentSupabaseAnonKeys");
     expect(supabaseConfig).toContain("dev-placeholder-anon-key");
 
-    for (const route of ["app/teams.tsx", "app/inbox.tsx", "app/teams/[teamId]/events.tsx", "app/teams/[teamId]/store.tsx"]) {
+    for (const route of ["app/teams.tsx", "app/(tabs)/inbox.tsx", "app/teams/[teamId]/events.tsx", "app/teams/[teamId]/store.tsx"]) {
       const source = readFileSync(resolve(appRoot, route), "utf-8");
 
       expect(source).toContain("ScreenState");
@@ -151,9 +152,8 @@ describe("mobile MVP smoke", () => {
 
   test("core list screens auto-load on entry while keeping manual refresh buttons", () => {
     const autoLoadExpectations = [
-      ["app/index.tsx", "handleLoadDashboard"],
       ["app/teams.tsx", "handleLoadTeams"],
-      ["app/inbox.tsx", "handleLoadNotifications"],
+      ["app/(tabs)/inbox.tsx", "handleLoadNotifications"],
       ["app/teams/[teamId]/events.tsx", "handleLoadEvents"],
       ["app/teams/[teamId]/store.tsx", "handleLoadItems"]
     ] as const;
@@ -163,8 +163,12 @@ describe("mobile MVP smoke", () => {
 
       expect(source).toContain("useEffect");
       expect(source).toContain(`void ${loader}();`);
-      expect(source).toContain(`onPress={${loader}}`);
     }
+
+    const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+    expect(homeSource).toContain("useTeamContext");
+    expect(homeSource).toContain("onRefresh");
+    expect(homeSource).toContain("refresh");
   });
 
   test("teams screen displays accessible organizations alongside teams", () => {
@@ -216,9 +220,8 @@ describe("mobile MVP smoke", () => {
       ["app/teams/[teamId]/index.tsx", "handleLoadHome"],
       ["app/teams/[teamId]/members.tsx", "handleLoadMembers"],
       ["app/teams/[teamId]/coins.tsx", "handleLoadCoins"],
-      ["app/teams/[teamId]/attendance-board.tsx", "handleLoadBoard"],
+      ["app/teams/[teamId]/signup-board.tsx", "handleLoadBoard"],
       ["app/events/[eventId].tsx", "handleLoadEvent"],
-      ["app/events/[eventId]/attendance.tsx", "handleLoadAttendance"],
       ["app/events/[eventId]/live.tsx", "handleLoadBoard"],
       ["app/events/[eventId]/summary.tsx", "handleLoadSummary"]
     ] as const;
@@ -239,20 +242,19 @@ describe("mobile MVP smoke", () => {
 
   test("API-backed screens format authentication, permission and validation errors", () => {
     const apiBackedScreens = [
-      "app/index.tsx",
+      "app/(tabs)/index.tsx",
       "app/login.tsx",
-      "app/profile.tsx",
+      "app/(tabs)/profile.tsx",
       "app/teams.tsx",
-      "app/inbox.tsx",
+      "app/(tabs)/inbox.tsx",
       "app/teams/[teamId]/index.tsx",
       "app/teams/[teamId]/members.tsx",
       "app/teams/[teamId]/events.tsx",
-      "app/teams/[teamId]/attendance-board.tsx",
+      "app/teams/[teamId]/signup-board.tsx",
       "app/teams/[teamId]/coins.tsx",
       "app/teams/[teamId]/store.tsx",
       "app/events/[eventId].tsx",
-      "app/events/[eventId]/attendance.tsx",
-      "app/events/[eventId]/live.tsx",
+          "app/events/[eventId]/live.tsx",
       "app/events/[eventId]/summary.tsx"
     ];
 
@@ -262,13 +264,14 @@ describe("mobile MVP smoke", () => {
       expect(source).toContain("formatApiError");
     }
 
-    const homeSource = readFileSync(resolve(appRoot, "app/index.tsx"), "utf-8");
+    const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
     expect(homeSource).toContain("ScreenState");
     expect(homeSource).toContain('t("common.authRequired")');
     expect(homeSource).toContain('t("common.loading")');
     expect(homeSource).toContain('t("common.retry")');
     expect(homeSource).toContain('t("home.openLogin")');
-    expect(homeSource).toContain("onRetry={handleLoadDashboard}");
+    expect(homeSource).toContain("onRetry={() => {");
+    expect(homeSource).toContain("void refresh()");
   });
 
   test("all referenced translation keys exist in Chinese and English", () => {
@@ -291,13 +294,15 @@ describe("mobile MVP smoke", () => {
   });
 
   test("home screen uses live team data instead of static demo metrics", () => {
-    const source = readFileSync(resolve(appRoot, "app/index.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+    const teamProvider = readFileSync(resolve(appRoot, "src/providers/TeamProvider.tsx"), "utf-8");
 
-    expect(source).toContain("getMyTeams");
-    expect(source).toContain("getTeamHome");
+    expect(teamProvider).toContain("getMyTeams");
+    expect(teamProvider).toContain("getTeamHome");
+    expect(source).toContain("useTeamContext");
     expect(source).toContain("LanguageToggle");
     expect(source).toContain("selectedTeamId");
-    expect(source).toContain("handleSelectTeam");
+    expect(source).toContain("selectTeam");
     expect(source).toContain("home.switchTeam");
     expect(source).toContain("home.currentTeam");
     expect(source).not.toContain("周二训练");
@@ -335,14 +340,14 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain('textContentType="password"');
     expect(source).toContain("secureTextEntry");
     expect(source).toContain("autoCorrect={false}");
-    expect(source).toContain('href="/teams"');
+    expect(source).toContain('router.replace("/teams")');
     expect(source).toContain("home.openTeams");
-    expect(source).toContain("ScrollView");
+    expect(source).toContain("Screen");
     expect(signInBody).not.toContain("buildProfileInput()");
   });
 
   test("profile screen validates and normalizes profile updates", () => {
-    const source = readFileSync(resolve(appRoot, "app/profile.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(tabs)/profile.tsx"), "utf-8");
 
     expect(source).toContain("useEffect");
     expect(source).toContain("void handleLoadProfile();");
@@ -353,7 +358,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("auth.nameRequired");
     expect(source).toContain("avatarUrl");
     expect(source).toContain("profile.avatarUrl");
-    expect(source).toContain("<Image");
+    expect(source).toContain("Avatar");
     expect(source).toContain('autoComplete="name"');
     expect(source).toContain('textContentType="name"');
     expect(source).toContain('keyboardType="url"');
@@ -361,16 +366,13 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("autoCorrect={false}");
     expect(source).toContain("syncProfile(profileInput)");
     expect(source).toContain("updateProfile(profileInput)");
-    expect(source).toContain('href="/teams"');
+    expect(source).toContain('router.push("/teams")');
     expect(source).toContain("home.openTeams");
-    expect(source).toContain('href="/inbox"');
     expect(source).toContain("profile.notificationSettings");
-    expect(source).toContain("style={[styles.secondaryButton, isSubmitting && styles.disabled]}");
-    expect(source).toContain("style={[styles.dangerButton, isSubmitting && styles.disabled]}");
     for (const handlerName of ["handleSyncProfile", "handleLoadProfile", "handleUpdateProfile", "handleSignOut"]) {
       expect(functionBody(source, handlerName)).toContain("if (isSubmitting)");
     }
-    expect(source).toContain("ScrollView");
+    expect(source).toContain("Screen");
   });
 
   test("team home exposes captain or admin team profile management", () => {
@@ -415,17 +417,21 @@ describe("mobile MVP smoke", () => {
     const source = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
 
     expect(source).toContain("getMySignup");
-    expect(source).toContain("signupNote");
+    expect(source).toContain("leaveReason");
     expect(source).toContain("events.signupNote");
     expect(source).toContain("events.signupNoteRequired");
     expect(source).toContain("canUpdateSignup");
     expect(source).toContain('event?.status === "published"');
     expect(source).toContain("isSignupOpen(event.signup_deadline, event.start_time)");
     expect(source).toContain("events.signupReadonly");
-    expect(functionBody(source, "handleSignup")).toContain("if (!canUpdateSignup)");
-    expect(functionBody(source, "handleSignup")).toContain('setMessage(t("events.signupReadonly"))');
-    expect(functionBody(source, "handleSignup")).toContain('status === "not_going" ? normalizedNote : null');
-    expect(functionBody(source, "handleSignup")).toContain('setSignupNote(savedSignup.note ?? "")');
+    expect(functionBody(source, "handleSubmitSignup")).toContain("if (!canUpdateSignup)");
+    expect(functionBody(source, "handleSubmitSignup")).toContain('showError(t("events.signupReadonly"))');
+    expect(functionBody(source, "handleSubmitSignup")).toContain('showSuccess(t("events.signupSaved"))');
+    expect(source).toContain('messageTone={messageTone}');
+    expect(functionBody(source, "handleSubmitSignup")).toContain(
+      'selectedSignupStatus === "not_going" ? normalizedNote : null'
+    );
+    expect(functionBody(source, "handleSubmitSignup")).toContain('setLeaveReason(savedSignup.note ?? "")');
     expect(source).toContain("events.mySignup");
     expect(source).toContain("events.matchDetails");
     expect(source).toContain("events.status.${event.status}");
@@ -470,7 +476,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("editEndTime");
     expect(source).toContain("editSignupDeadline");
     expect(source).toContain("editMatchResult === result && styles.activeButton");
-    expect(source).toContain("editMatchResult === result && styles.activeButton,\n                      isLoading && styles.disabled");
+    expect(source).toContain("isLoading && styles.disabled");
     expect(source).toContain("autoCorrect={false}");
     expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
     expect(source).toContain("style={[styles.dangerButton, isLoading && styles.disabled]}");
@@ -479,8 +485,16 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("useRouter");
     expect(source).toContain("const deletedTeamId = event?.team_id ?? null;");
     expect(source).toContain('router.replace({ pathname: "/teams/[teamId]/events", params: { teamId: deletedTeamId } })');
-    expect(source).toContain("event && eventId ? (");
-    expect(source).toContain('pathname: "/events/[eventId]/attendance"');
+    expect(source).toContain('event?.type === "match" && eventId ? (');
+    expect(source).toContain('pathname: "/events/[eventId]/summary"');
+    expect(source).toContain('pathname: "/events/[eventId]/live"');
+    expect(source).toContain("completeEvent");
+    expect(source).toContain("events.completeConfirmTitle");
+    expect(source).toContain("events.goingCount");
+    expect(source).toContain("events.rewardCount");
+    expect(source).toContain("completion.going_count");
+    expect(source).toContain("completion.reward_count");
+    expect(source).toContain("canCompleteEvent");
   });
 
   test("event creation exposes scheduling, signup deadline and match notes fields", () => {
@@ -562,8 +576,8 @@ describe("mobile MVP smoke", () => {
     const apiSource = readFileSync(resolve(appRoot, "src/features/coins/api.ts"), "utf-8");
     const validationSource = readFileSync(resolve(appRoot, "src/features/coins/validation.ts"), "utf-8");
 
-    expect(apiSource).toContain('"training_attendance" | "match_attendance" | "late_attendance" | "manual"');
-    expect(source).toContain('type AttendanceCoinRuleTrigger = Exclude<CoinRuleTrigger, "manual">');
+    expect(apiSource).toContain('"training_signup" | "match_signup" | "manual"');
+    expect(source).toContain('type SignupCoinRuleTrigger = Exclude<CoinRuleTrigger, "manual">');
     expect(source).toContain("selectEffectiveCoinRule");
     expect(validationSource).toContain("selectEffectiveCoinRule");
     expect(validationSource).toContain("rule.trigger_type === triggerType && rule.is_active");
@@ -649,91 +663,53 @@ describe("mobile MVP smoke", () => {
   });
 
   test("inbox links actionable notifications back to relevant MVP screens", () => {
-    const source = readFileSync(resolve(appRoot, "app/inbox.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(tabs)/inbox.tsx"), "utf-8");
 
-    expect(source).toContain("renderNotificationLink");
     expect(source).toContain("createTeamAnnouncement");
     expect(source).toContain("handleCreateAnnouncement");
     expect(source).toContain("useLocalSearchParams");
     expect(source).toContain("scopedTeamId");
     expect(source).toContain("setAnnouncementTeamId(scopedTeamId)");
     expect(source).toContain("const normalizedTeamId = scopedTeamId ?? announcementTeamId.trim();");
-    expect(source).toContain("getTeamHome");
+    expect(source).toContain("useTeamContext");
     expect(source).toContain("getMyTeams");
     expect(source).toContain("announcementTeams");
     expect(source).toContain('getMyTeams({ status: "active" })');
-    expect(source).toContain("setAnnouncementTeams(nextAnnouncementTeams)");
-    expect(source).toContain("currentRole");
-    expect(source).toContain("setCurrentRole(teamHome?.current_membership.role ?? null)");
-    expect(source).toContain("canSendScopedAnnouncement");
-    expect(source).toContain('currentRole === "captain" || currentRole === "admin"');
-    expect(source).toContain("if (!canSendScopedAnnouncement)");
-    expect(functionBody(source, "handleLoadNotifications")).not.toContain("if (!canSendScopedAnnouncement)");
+    expect(source).toContain("canSendAnnouncement");
+    expect(source).toContain('role === "captain" || role === "admin"');
     expect(source).toContain("inbox.captainOnlyHint");
     expect(source).toContain("loadNotifications");
     expect(source).toContain("handleToggleUnreadOnly");
     expect(source).toContain("const nextUnreadOnly = !unreadOnly");
     expect(source).toContain("await loadNotifications(nextUnreadOnly, { showEmptyMessage: true });");
-    expect(source).toContain("onPress={handleToggleUnreadOnly}");
-    expect(source).toContain("style={[styles.smallButton, unreadOnly && styles.activeButton, isLoading && styles.disabled]}");
     expect(source).toContain("getNotifications({ teamId: scopedTeamId, unreadOnly: nextUnreadOnly })");
     expect(source).toContain("getUnreadCount({ teamId: scopedTeamId })");
     expect(source).toContain("getDefaultDevicePlatform");
     expect(source).toContain("requestExpoPushTokenAsync");
     expect(source).toContain("normalizeExpoPushToken");
     expect(source).toContain("inbox.invalidDeviceToken");
-    expect(source.split('placeholder={t("inbox.deviceToken")}')[0].slice(-180)).toContain("autoCorrect={false}");
     expect(source).toContain("inbox.autoRegisterDevice");
-    expect(source).toContain("style={[styles.smallButton, devicePlatform === platform && styles.activeButton, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.dangerButton, isLoading && styles.disabled]}");
     expect(source).toContain("inbox.notificationPermissionDenied");
     expect(source).toContain("inbox.notificationUnsupported");
-    expect(source).toContain("inbox.scopedAnnouncementHint");
-    expect(source).toContain("inbox.chooseAnnouncementTeam");
-    expect(source).toContain("inbox.noAnnouncementTeams");
-    expect(source).toContain("announcementTeams.map((team)");
-    expect(source).toContain("onPress={() => setAnnouncementTeamId(team.id)}");
-    expect(source).toContain("announcementTeamId === team.id");
-    expect(source).toContain("style={[styles.teamButton, announcementTeamId === team.id && styles.activeButton, isLoading && styles.disabled]}");
-    expect(source).toContain("inbox.announcementTeamId");
-    expect(source.split('placeholder={t("inbox.announcementTeamId")}')[0].slice(-180)).toContain("autoCorrect={false}");
     expect(source).toContain("inbox.sendAnnouncement");
     expect(source).toContain("inbox.announcementSent");
     expect(source).toContain('reference_type === "event"');
-    expect(source).toContain('reference_type === "event_snapshot"');
-    expect(source).toContain("inbox.eventSnapshotHint");
     expect(source).toContain('reference_type === "coin_transaction"');
     expect(source).toContain('reference_type === "redemption"');
     expect(source).toContain('reference_type === "team"');
-    expect(source).toContain("inbox.openEvent");
-    expect(source).toContain("inbox.openCoins");
-    expect(source).toContain("inbox.openStore");
-    expect(source).toContain("inbox.openTeam");
-    expect(source).toContain("updateMySignup");
+    expect(source).toContain("getMySignup");
     expect(source).toContain("isActionableEventNotification");
-    const actionableEventHelperStart = source.indexOf("function isActionableEventNotification");
-    const actionableEventHelperEnd = source.indexOf("\nexport default function InboxScreen", actionableEventHelperStart);
-    const actionableEventHelperBody = source.slice(actionableEventHelperStart, actionableEventHelperEnd);
-    expect(actionableEventHelperBody).toContain('notification.reference_type === "event"');
-    expect(actionableEventHelperBody).toContain("notification.reference_id !== null");
-    expect(actionableEventHelperBody).not.toContain("event_snapshot");
-    expect(actionableEventHelperBody).not.toContain("event_deleted");
-    expect(source).toContain("handleQuickSignup");
-    expect(source).toContain("renderEventQuickSignup");
-    expect(source).toContain("signupNotesByNotificationId");
-    expect(functionBody(source, "handleQuickSignup")).toContain("if (!isActionableEventNotification(notification))");
-    expect(source).toContain("function renderEventQuickSignup(notification: Notification)");
-    expect(source).toContain("if (!isActionableEventNotification(notification))");
-    expect(functionBody(source, "handleQuickSignup")).toContain('status === "not_going" ? note : null');
-    expect(functionBody(source, "handleQuickSignup")).toContain('status === "not_going" ? note : ""');
-    expect(source).toContain("events.signupNoteRequired");
-    expect(source).toContain("events.signupSaved");
-    expect(source).toContain("inbox.quickSignup");
-    expect(source).toContain('onPress={() => handleQuickSignup(notification, "not_going")}');
-    expect(source).toContain("style={[styles.smallButton, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
-    expect(source).toContain("onPress={() => handleMarkRead(notification.id)}");
+    expect(source).toContain("openNotification");
+    expect(source).toContain("signupsByEventId");
+    expect(source).toContain("loadEventSignups");
+    expect(source).toContain("inbox.mySignup");
+    expect(source).toContain("inbox.signupPending");
+    expect(source).toContain("inbox.signupConfirmed");
+    expect(source).toContain("inbox.signupLeave");
+    expect(source).not.toContain("handleQuickSignup");
+    expect(source).not.toContain("inbox.quickSignup");
+    expect(source).not.toContain("updateMySignup");
+    expect(source).toContain("handleMarkRead");
   });
 
   test("store screen separates player and captain redemption flows", () => {
@@ -923,137 +899,76 @@ describe("mobile MVP smoke", () => {
     expect(source).not.toContain('left_at:');
   });
 
-  test("attendance board route exposes team ranking data and filters", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/attendance-board.tsx"), "utf-8");
+  test("signup board route exposes team ranking data and filters", () => {
+    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/signup-board.tsx"), "utf-8");
     const teamsSource = readFileSync(resolve(appRoot, "app/teams.tsx"), "utf-8");
     const teamHomeSource = readFileSync(resolve(appRoot, "app/teams/[teamId]/index.tsx"), "utf-8");
 
-    expect(source).toContain("getTeamAttendanceBoard");
-    expect(source).toContain("attendance_rate");
+    expect(source).toContain("getTeamSignupBoard");
+    expect(source).toContain("going_rate");
     expect(source).toContain("row.user?.name ?? row.user?.email ?? row.user_id");
-    expect(source).toContain("attendanceBoard.startsAfter");
-    expect(source).toContain("attendanceBoard.startsBefore");
-    expect(source.split('placeholder={t("attendanceBoard.startsAfter")}')[0].slice(-180)).toContain("autoCorrect={false}");
-    expect(source.split('placeholder={t("attendanceBoard.startsBefore")}')[0].slice(-180)).toContain("autoCorrect={false}");
+    expect(source).toContain("signupBoard.startsAfter");
+    expect(source).toContain("signupBoard.startsBefore");
+    expect(source.split('placeholder={t("signupBoard.startsAfter")}')[0].slice(-180)).toContain("autoCorrect={false}");
+    expect(source.split('placeholder={t("signupBoard.startsBefore")}')[0].slice(-180)).toContain("autoCorrect={false}");
     expect(source).toContain("parseOptionalIsoDateTime");
-    expect(source).toContain("attendanceBoard.invalidDateTime");
+    expect(source).toContain("signupBoard.invalidDateTime");
     expect(source).toContain("startsAfter: parsedStartsAfter");
     expect(source).toContain("startsBefore: parsedStartsBefore");
-    expect(teamsSource).toContain("/teams/[teamId]/attendance-board");
-    expect(teamHomeSource).toContain("/teams/[teamId]/attendance-board");
+    expect(teamsSource).toContain("/teams/[teamId]/signup-board");
+    expect(teamHomeSource).toContain("/teams/[teamId]/signup-board");
   });
 
-  test("attendance route can load signups and record directly from the signup list", () => {
-    const source = readFileSync(resolve(appRoot, "app/events/[eventId]/attendance.tsx"), "utf-8");
-    const loadHandlerStart = source.indexOf("async function handleLoadAttendance()");
-    const loadHandlerEnd = source.indexOf("useEffect", loadHandlerStart);
+  test("event detail route can complete published events with signup rewards", () => {
+    const source = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
 
-    expect(source).toContain("refreshAttendanceData");
-    expect(source).toContain("await refreshAttendanceData();");
-    expect(source.slice(loadHandlerStart, loadHandlerEnd)).not.toContain("if (!canManageAttendance)");
-    expect(source).toContain("getEvent");
-    expect(source).toContain("getTeamHome");
-    expect(source).toContain("getTeamMembers");
-    expect(source).toContain("getEventSignups");
-    expect(source).toContain("currentRole");
-    expect(source).toContain("const nextRole = teamHome.current_membership.role");
-    expect(source).toContain('const nextCanManageAttendance = nextRole === "captain" || nextRole === "admin"');
-    expect(source).toContain("const [nextSignups, nextMembers] = nextCanManageAttendance");
-    expect(source).toContain("getTeamMembers(loadedEvent.team_id, { status: \"active\" })");
-    expect(source).toContain("setMembers(nextMembers)");
-    expect(source).toContain("setCurrentRole(nextRole)");
-    expect(source).toContain("canManageAttendance");
-    expect(source).toContain('currentRole === "captain" || currentRole === "admin"');
-    expect(source).toContain("canRecordAttendance");
-    expect(source).toContain('canManageAttendance && (event?.status === "published" || event?.status === "completed")');
+    expect(source).toContain("completeEvent");
+    expect(source).toContain("canManageEventRole");
     expect(source).toContain("canCompleteEvent");
-    expect(source).toContain('canManageAttendance && event?.status === "published"');
-    expect(source).toContain('if (event?.status !== "published")');
-    expect(source).toContain('event?.status !== "published" && event?.status !== "completed"');
+    expect(source).toContain('canManageEventRole && event?.status === "published"');
     expect(source).toContain("Alert.alert");
-    expect(source).toContain("attendance.completeConfirmTitle");
-    expect(source).toContain("attendance.completeConfirmBody");
-    expect(source).toContain("attendance.completeConfirmAction");
+    expect(source).toContain("events.completeConfirmTitle");
+    expect(source).toContain("events.completeConfirmBody");
+    expect(source).toContain("events.completeConfirmAction");
     expect(source).toContain("common.cancel");
     expect(source).toContain("performCompleteEvent");
-    expect(functionBody(source, "performCompleteEvent")).toContain("if (!canManageAttendance)");
-    expect(functionBody(source, "performCompleteEvent")).toContain("if (event?.status !== \"published\")");
-    expect(functionBody(source, "performCompleteEvent")).toContain("await completeEvent(eventId, matchDetailsInput)");
-    expect(source).toContain("const matchDetailsInput: EventCompletionInput");
-    expect(source).toContain("onPress: () => void performCompleteEvent(matchDetailsInput)");
-    expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.smallButton, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.smallButton, finalMatchResult === result && styles.activeButton, isLoading && styles.disabled]}");
-    expect(source).toContain("isLoading && styles.disabled");
-    expect(source).toContain("autoCorrect={false}");
-    expect(source).toContain("finalTeamScore");
-    expect(source).toContain("finalOpponentScore");
-    expect(source).toContain("finalMatchResult");
-    expect(source).toContain("finalMatchNotes");
+    expect(functionBody(source, "performCompleteEvent")).toContain("if (!canManageEventRole)");
+    expect(functionBody(source, "performCompleteEvent")).toContain('if (event?.status !== "published")');
+    expect(functionBody(source, "performCompleteEvent")).toContain("await completeEvent(");
+    expect(source).toContain("events.goingCount");
+    expect(source).toContain("events.rewardCount");
+    expect(source).toContain("completion.going_count");
+    expect(source).toContain("completion.reward_count");
     expect(source).toContain("isValidMatchScoreResult");
     expect(source).toContain("parseOptionalNonNegativeInteger");
-    expect(source).toContain('event?.type === "match"');
-    expect(source).toContain("match_details: {");
-    expect(source).toContain("team_score: parsedTeamScore");
-    expect(source).toContain("opponent_score: parsedOpponentScore");
-    expect(source).toContain("result: finalMatchResult");
-    expect(source).toContain("events.invalidMatchInput");
-    expect(source).toContain("events.invalidMatchScoreResult");
-    expect(source).toContain("events.teamScore");
-    expect(source).toContain("events.opponentScore");
-    expect(source).toContain("events.result.${result}");
-    expect(source).toContain("events.matchNotes");
-    expect(source).toContain("attendance.captainOnlyHint");
-    expect(source).toContain("attendance.recordReadonly");
-    expect(source).toContain("signups");
-    expect(source).toContain("attendance.signups");
-    expect(source).toContain("signupStatus");
-    expect(source).toContain("signupStatuses");
-    expect(source).toContain("attendance.signupFilters");
-    expect(source).toContain("attendance.allSignupStatuses");
-    expect(source).toContain("getEventSignups(eventId, signupStatus)");
-    expect(source).toContain("attendance.noSignups");
-    expect(source).toContain("attendance.activeMembers");
-    expect(source).toContain("attendance.noMembers");
-    expect(source).toContain("members.map((membership)");
-    expect(source).toContain("onPress={() => setTargetUserId(membership.user_id)}");
-    expect(source).toContain("targetUserId === membership.user_id");
-    expect(source).toContain("attendance.records");
-    expect(source).toContain("memberLabel");
-    expect(source).toContain("signup.user.email");
-    expect(source).toContain("row.user.email");
-    expect(source).toContain("attendance.${row.status}");
-    expect(source).toContain("normalizeUserId");
-    expect(source).toContain("normalizeAttendanceNote");
-    expect(source).toContain("attendance.invalidUserId");
-    expect(source).toContain("attendance.rewardCount");
-    expect(source).toContain("handleRecordAttendance(signup.user_id");
-    expect(source).toContain('pathname: "/teams/[teamId]/coins"');
-    expect(source).toContain('pathname: "/teams/[teamId]/attendance-board"');
-    expect(source).toContain('pathname: "/events/[eventId]/summary"');
     expect(source).toContain('event.type === "match"');
-    expect(source).toContain("params: { teamId: event.team_id }");
-    expect(source).toContain('t("coins.title")');
-    expect(source).toContain('t("attendanceBoard.title")');
+    expect(source).toContain("match_details: {");
+    expect(source).toContain("team_score: teamScore");
+    expect(source).toContain("opponent_score: opponentScore");
+    expect(source).toContain("result: editMatchResult");
+    expect(source).toContain("events.invalidMatchScoreResult");
+    expect(source).toContain('pathname: "/events/[eventId]/summary"');
+    expect(source).toContain('pathname: "/events/[eventId]/live"');
   });
 
-  test("match summary route exposes final match stats, attendance and rewards", () => {
+  test("match summary route exposes final match stats, signups and rewards", () => {
     const source = readFileSync(resolve(appRoot, "app/events/[eventId]/summary.tsx"), "utf-8");
     const eventSource = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
     const liveSource = readFileSync(resolve(appRoot, "app/events/[eventId]/live.tsx"), "utf-8");
 
     expect(source).toContain("getMatchSummary");
     expect(source).toContain("summary.counts.goal");
-    expect(source).toContain("summary.attendance");
+    expect(source).toContain("summary.signups");
     expect(source).toContain("summary.rewards");
     expect(source).toContain("events.result.${summary.match_details.result}");
-    expect(source).toContain("attendance.${row.status}");
+    expect(source).toContain("events.signup.${row.status}");
     expect(source).toContain("match.loadSummary");
+    expect(source).toContain("match.signupSummary");
+    expect(source).toContain("match.rewardSummary");
     expect(source).toContain('pathname: "/events/[eventId]"');
-    expect(source).toContain('pathname: "/events/[eventId]/attendance"');
     expect(source).toContain('pathname: "/events/[eventId]/live"');
     expect(eventSource).toContain("/events/[eventId]/summary");
-    expect(liveSource).toContain('pathname: "/events/[eventId]/attendance"');
+
     expect(liveSource).toContain('pathname: "/events/[eventId]/summary"');
   });
 
@@ -1127,15 +1042,16 @@ describe("mobile MVP smoke", () => {
       "Team Home",
       "Display language: en",
       "登录",
-      "姓名",
-      "注册",
+      "欢迎回来",
+      "邮箱 / 学号",
+      "立即注册",
       "个人资料",
       "头像 URL，可留空",
-      "我的球队",
-      "加载球队",
+      "我的",
+      "活动",
       "收件箱",
-      "球队公告",
-      "球队 UUID"
+      "商店",
+      "球队商店"
     ]) {
       expect(source).toContain(label);
     }

@@ -25,10 +25,10 @@ def completed_device_smoke_report() -> str:
                 "Captain/admin match live logging: goal, card, substitution",
                 "Match log delete confirmation",
                 "Member read-only live board access",
-                "Attendance completion with missing members marked absent",
+                "Event completion with signup rewards for going members",
                 "Completed event edit/delete blocked",
-                "Attendance correction coin clawback and negative-balance allowance",
-                "Attendance board filters and rows",
+                "Manual coin adjustment allows negative balances",
+                "Signup board filters and rows",
                 "Coin balance, ledger, reward rule editing, and manual adjustment",
                 "Store item redemption and finite-stock deduction",
                 "Fulfillment notification",
@@ -448,7 +448,7 @@ def test_readme_mvp_status_tracks_recent_mobile_and_notification_flows() -> None
     for phrase in (
         "list filters",
         "create/publish/update/delete event notifications",
-        "signup lists",
+        "Events, matches, signup",
         "member quick-select",
         "created, published, updated, or deleted",
         "active/archived team filters for reactivation",
@@ -498,45 +498,31 @@ def test_readme_mvp_status_tracks_recent_mobile_and_notification_flows() -> None
 
 
 def test_completion_service_locks_event_before_settlement() -> None:
-    attendance_service = (ROOT_DIR / "backend" / "app" / "attendance" / "service.py").read_text(
+    events_service = (ROOT_DIR / "backend" / "app" / "events" / "service.py").read_text(
         encoding="utf-8"
     )
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
-
-    assert "_get_event_for_completion" in attendance_service
-    assert "with_for_update()" in attendance_service
-    assert "锁定 Event" in api_spec
-
-
-def test_completed_attendance_correction_allows_existing_inactive_member_rows_only() -> None:
-    attendance_service = (ROOT_DIR / "backend" / "app" / "attendance" / "service.py").read_text(
-        encoding="utf-8"
-    )
-    api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
-    requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
-    tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
-    upsert_body = attendance_service.split("def upsert_attendance(", maxsplit=1)[1].split(
-        "\ndef _apply_completion_match_details(",
+    complete_body = events_service.split("def complete_event(", maxsplit=1)[1].split(
+        "\n\ndef ",
         maxsplit=1,
     )[0]
 
-    assert "attendance = session.scalar(" in upsert_body
-    assert "if attendance is None or event.status != EventStatus.completed:" in upsert_body
-    assert "get_active_membership(session, event.team_id, target_user_id)" in upsert_body
-    assert "reconcile_completed_attendance_reward(session, event, attendance, user.id)" in upsert_body
-    assert upsert_body.index("attendance = session.scalar(") < upsert_body.index(
-        "if attendance is None or event.status != EventStatus.completed:"
-    )
+    assert "_get_event_for_update" in events_service
+    assert "with_for_update()" in events_service
+    assert "event = _get_event_for_update(session, event_id)" in complete_body
+    assert "锁定 Event" in api_spec
 
-    for phrase in (
-        "completed 活动中已有的 Attendance 可以继续被 captain/admin 修正",
-        "不能为没有既有 Attendance 的 inactive 成员新建记录",
-    ):
-        assert phrase in api_spec
-    assert "已有的历史考勤即使成员后来 inactive 也可修正" in requirements
-    assert "不能为 inactive 成员新增历史考勤" in requirements
-    assert "captains/admins may still correct an existing Attendance row" in tech_stack
-    assert "without allowing new inactive-member attendance rows" in tech_stack
+
+def test_completion_docs_reject_post_completion_attendance_correction() -> None:
+    api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
+    requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
+    tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
+
+    assert "不提供赛后出勤修正接口" in api_spec
+    assert "MVP 不再维护独立 Attendance 实体或出勤 API" in api_spec
+    assert "不维护独立出勤记录，也不自动补 absent" in requirements
+    assert "There is no Attendance upsert or post-completion attendance correction path" in tech_stack
+    assert "coin clawback for rewards is not driven by attendance edits" in tech_stack
 
 
 def test_publish_event_is_documented_and_implemented_as_idempotent() -> None:
@@ -676,11 +662,8 @@ def test_api_spec_documents_user_summaries_on_mobile_member_lists() -> None:
     for phrase in (
         "user                # nullable UserSummary",
         "报名列表和我的报名响应可由后端按 user_id 附带 UserSummary",
-        "出勤列表、出勤 upsert 响应和出勤榜可由后端按 user_id 附带 UserSummary",
         "响应包含 `user` 摘要，移动端可直接展示姓名/邮箱",
         "响应中每条 EventSignup 包含 `user` 摘要",
-        "响应中每条 Attendance 包含 `user` 摘要",
-        "响应返回保存后的 Attendance，并附带目标成员的 `user` 摘要",
         "附带每名成员的 `user` 摘要用于移动端排行榜展示",
     ):
         assert phrase in api_spec
@@ -761,7 +744,7 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
             "Inbox",
             "event signup",
             "match",
-            "attendance completion",
+            "event completion with signup rewards",
             "coin balance",
             "store redemption",
             "missing platform pass rows",
@@ -806,10 +789,8 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
         "As a member",
         "match logs are read-only",
         "destructive confirmation dialog",
-        "missing active members are marked `absent`",
-        "coins are clawed back",
-        "negative balances are allowed",
-        "attendance board",
+        "signup rewards for `going`",
+        "signup board",
         "reward rule amounts",
         "finite stock is reduced",
         "finite stock is restored",
@@ -837,7 +818,8 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
         "Event signup states: going / maybe / not going with reason",
         "Captain/admin match live logging",
         "Member read-only live board access",
-        "Attendance correction coin clawback",
+        "Event completion with signup rewards",
+        "Signup board filters and rows",
         "Store item redemption",
         "Notification deep-link behavior",
         "Failures and follow-up",
@@ -853,18 +835,15 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
         "tapOn: \"Display language: en\"",
         "登录",
         "姓名",
-        "学号，可选",
-        "邮箱",
+        "学号",
+        "邮箱 / 学号",
         "密码",
-        "注册",
+        "立即注册",
         "个人资料",
         "头像 URL，可留空",
-        "我的球队",
-        "加载球队",
         "收件箱",
-        "球队公告",
-        "球队 UUID",
-        "加载通知",
+        "球队活动",
+        "球队商店",
     ):
         assert phrase in maestro_flow
 
@@ -1059,7 +1038,7 @@ def test_api_spec_documents_recent_visibility_boundaries() -> None:
         "普通 member 不可通过 draft 活动 ID 读取报名状态",
         "current_membership",
         "当前用户在该球队的 active TeamMembership",
-        "普通 member 即使知道 event_id 也不可读取",
+        "普通 member 不可通过 event_id 读取",
         "draft match 仅 captain/admin 可读取",
         "即使显式传 is_active=false 也不会返回下架商品",
         "通知内容保存活动标题和开始时间快照",
@@ -1082,19 +1061,25 @@ def test_api_spec_documents_event_completion_match_details_boundaries() -> None:
         '"team_score": 2',
         '"opponent_score": 1',
         '"result": "win"',
-        "重复调用已 completed 的活动时返回现有结果，不重复发币",
+        "重复调用已 completed 的活动时返回现有结果（`reward_count` 为 0），不重复发币",
+        "`going_count`",
+        "`reward_count`",
     ):
         assert phrase in completion_section
 
 
-def test_event_completion_backfills_historical_eligible_members() -> None:
-    attendance_service = (ROOT_DIR / "backend" / "app" / "attendance" / "service.py").read_text(
+def test_event_completion_rewards_historical_eligible_members() -> None:
+    events_service = (ROOT_DIR / "backend" / "app" / "events" / "service.py").read_text(
         encoding="utf-8"
     )
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
     requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
-    complete_body = attendance_service.split("def complete_event(", maxsplit=1)[1].split(
+    complete_body = events_service.split("def complete_event(", maxsplit=1)[1].split(
+        "\n\ndef ",
+        maxsplit=1,
+    )[0]
+    eligible_body = events_service.split("def _eligible_member_ids_for_event(", maxsplit=1)[1].split(
         "\n\ndef ",
         maxsplit=1,
     )[0]
@@ -1104,14 +1089,23 @@ def test_event_completion_backfills_historical_eligible_members() -> None:
         "TeamMembership.status == MembershipStatus.active",
         "TeamMembership.left_at >= event.start_time",
     ):
+        assert phrase in eligible_body
+
+    for phrase in (
+        "SignupStatus.maybe",
+        "SignupStatus.going",
+        "issue_signup_reward",
+        "_eligible_member_ids_for_event",
+    ):
         assert phrase in complete_body
 
     for doc in (api_spec, requirements, tech_stack):
         assert "joined_at <= event.start_time" in doc
         assert "left_at >= event.start_time" in doc
 
-    assert "活动后才加入的成员不会被自动补 absent" in api_spec
-    assert "活动时仍在队但完成前离队的成员会被自动补 absent" in requirements
+    assert "无报名记录的成员按 `maybe` 处理；不自动创建 absent 或其他出勤记录" in api_spec
+    assert "不维护独立出勤记录，也不自动补 absent" in requirements
+    assert "treat missing signup as `maybe`" in tech_stack
 
 
 def test_api_spec_documents_idempotent_redemption_compensation() -> None:
@@ -1183,7 +1177,7 @@ def test_coin_rule_creation_is_documented_and_implemented_as_idempotent() -> Non
     for phrase in (
         "客户端应生成 CoinRule UUID `id` 并随请求提交",
         "幂等返回已有 CoinRule",
-        "避免网络重试重复创建训练/比赛/迟到奖励规则",
+        "避免网络重试重复创建训练/比赛报名奖励规则",
     ):
         assert phrase in api_spec
     assert "创建金币规则由客户端提交 UUID `id`" in requirements
@@ -1245,8 +1239,10 @@ def test_api_spec_documents_generated_mvp_endpoints() -> None:
         "POST /api/v1/events/{event_id}/publish",
         "DELETE /api/v1/events/{event_id}",
         "POST /api/v1/events/{event_id}/complete",
-        "GET /api/v1/events/{event_id}/attendance",
-        "PUT /api/v1/events/{event_id}/attendance/{user_id}",
+        "GET /api/v1/events/{event_id}/signup",
+        "PUT /api/v1/events/{event_id}/signup",
+        "GET /api/v1/events/{event_id}/signups",
+        "GET /api/v1/teams/{team_id}/signup-board",
         "GET /api/v1/events/{event_id}/summary",
         "GET /api/v1/teams/{team_id}/coin-rules",
         "POST /api/v1/teams/{team_id}/redemptions",

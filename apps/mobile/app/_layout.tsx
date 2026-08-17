@@ -2,12 +2,16 @@ import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { AppState, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { registerDeviceToken } from "@/features/notifications/api";
 import { refreshExpoPushTokenIfGrantedAsync } from "@/features/notifications/deviceToken";
 import { getNotificationRoute } from "@/features/notifications/navigation";
 import { AppProviders } from "@/providers/AppProviders";
+import { installWebAlert } from "@/lib/webAlert";
 import { colors } from "@/theme/colors";
+
+installWebAlert();
 
 export default function RootLayout() {
   const router = useRouter();
@@ -65,20 +69,27 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AppProviders>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.keyboardAvoidingContainer}
-      >
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.surface },
-            headerTintColor: colors.text,
-            contentStyle: { backgroundColor: colors.background }
-          }}
-        />
-      </KeyboardAvoidingView>
-    </AppProviders>
+    <SafeAreaProvider>
+      <AppProviders>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.keyboardAvoidingContainer}
+        >
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.text,
+              headerTitleStyle: { fontWeight: "700" },
+              contentStyle: { backgroundColor: colors.background },
+              headerShadowVisible: false
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+          </Stack>
+        </KeyboardAvoidingView>
+      </AppProviders>
+    </SafeAreaProvider>
   );
 }
 

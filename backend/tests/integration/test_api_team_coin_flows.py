@@ -348,7 +348,7 @@ def test_coin_router_limits_rules_and_member_transaction_reads_to_team_roles(
             team_a.id,
             CoinRuleCreateRequest(
                 name="成员非法配置",
-                trigger_type=CoinRuleTrigger.training_attendance,
+                trigger_type=CoinRuleTrigger.training_signup,
                 amount=1,
             ),
             team_a_member,
@@ -361,7 +361,7 @@ def test_coin_router_limits_rules_and_member_transaction_reads_to_team_roles(
         team_a.id,
         CoinRuleCreateRequest(
             name="训练奖励",
-            trigger_type=CoinRuleTrigger.training_attendance,
+            trigger_type=CoinRuleTrigger.training_signup,
             amount=10,
         ),
         team_a_admin,
@@ -393,7 +393,7 @@ def test_coin_rule_creation_is_idempotent_by_client_rule_id(session: Session) ->
     payload = CoinRuleCreateRequest(
         id=rule_id,
         name="幂等训练奖励",
-        trigger_type=CoinRuleTrigger.training_attendance,
+        trigger_type=CoinRuleTrigger.training_signup,
         amount=10,
         config={"source": "captain-setting"},
         is_active=True,
@@ -411,7 +411,7 @@ def test_coin_rule_creation_is_idempotent_by_client_rule_id(session: Session) ->
             CoinRuleCreateRequest(
                 id=rule_id,
                 name="幂等训练奖励",
-                trigger_type=CoinRuleTrigger.training_attendance,
+                trigger_type=CoinRuleTrigger.training_signup,
                 amount=12,
                 config={"source": "captain-setting"},
                 is_active=True,
@@ -596,7 +596,7 @@ def test_coin_router_rejects_cross_team_admin_access_to_rules_transactions_and_m
         team_a.id,
         CoinRuleCreateRequest(
             name="A 队训练奖励",
-            trigger_type=CoinRuleTrigger.training_attendance,
+            trigger_type=CoinRuleTrigger.training_signup,
             amount=10,
         ),
         team_a_admin,

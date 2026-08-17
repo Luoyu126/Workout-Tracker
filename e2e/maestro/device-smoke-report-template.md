@@ -72,10 +72,10 @@ timestamp, or tester note.
 | Captain/admin match live logging: goal, card, substitution |  |  |  |
 | Match log delete confirmation |  |  |  |
 | Member read-only live board access |  |  |  |
-| Attendance completion with missing members marked absent |  |  |  |
+| Event completion with signup rewards for going members |  |  |  |
 | Completed event edit/delete blocked |  |  |  |
-| Attendance correction coin clawback and negative-balance allowance |  |  |  |
-| Attendance board filters and rows |  |  |  |
+| Manual coin adjustment allows negative balances |  |  |  |
+| Signup board filters and rows |  |  |  |
 | Coin balance, ledger, reward rule editing, and manual adjustment |  |  |  |
 | Store item redemption and finite-stock deduction |  |  |  |
 | Fulfillment notification |  |  |  |

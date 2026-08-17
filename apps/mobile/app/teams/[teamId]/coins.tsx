@@ -31,21 +31,20 @@ import type { TranslationKey } from "@/lib/i18n/translations";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
 
-type AttendanceCoinRuleTrigger = Exclude<CoinRuleTrigger, "manual">;
+type SignupCoinRuleTrigger = Exclude<CoinRuleTrigger, "manual">;
 
 const defaultRuleInputs: Array<{
-  trigger: AttendanceCoinRuleTrigger;
+  trigger: SignupCoinRuleTrigger;
   labelKey: TranslationKey;
   defaultAmount: string;
 }> = [
-  { trigger: "training_attendance", labelKey: "coins.training", defaultAmount: "10" },
-  { trigger: "match_attendance", labelKey: "coins.match", defaultAmount: "20" },
-  { trigger: "late_attendance", labelKey: "coins.late", defaultAmount: "5" }
+  { trigger: "training_signup", labelKey: "coins.training", defaultAmount: "10" },
+  { trigger: "match_signup", labelKey: "coins.match", defaultAmount: "20" }
 ];
 
 const coinTransactionTypes: Array<CoinTransactionType | null> = [
   null,
-  "attendance_reward",
+  "signup_reward",
   "redemption",
   "admin_adjustment",
   "other_reward",
@@ -67,10 +66,9 @@ export default function TeamCoinsScreen() {
   const [memberTransactions, setMemberTransactions] = useState<CoinTransaction[]>([]);
   const [members, setMembers] = useState<Membership[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
-  const [amounts, setAmounts] = useState<Record<AttendanceCoinRuleTrigger, string>>({
-    training_attendance: "10",
-    match_attendance: "20",
-    late_attendance: "5"
+  const [amounts, setAmounts] = useState<Record<SignupCoinRuleTrigger, string>>({
+    training_signup: "10",
+    match_signup: "20"
   });
   const [targetUserId, setTargetUserId] = useState("");
   const [adjustAmount, setAdjustAmount] = useState("10");
@@ -159,7 +157,7 @@ export default function TeamCoinsScreen() {
     }
   }, [teamId]);
 
-  async function handleSaveRule(trigger: AttendanceCoinRuleTrigger, label: string) {
+  async function handleSaveRule(trigger: SignupCoinRuleTrigger, label: string) {
     if (!teamId) {
       return;
     }
@@ -591,7 +589,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -602,18 +600,18 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
     padding: 16
   },
@@ -630,7 +628,7 @@ const styles = StyleSheet.create({
   transactionRow: {
     alignItems: "flex-start",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     flexDirection: "row",
     gap: 12,
     padding: 12
@@ -647,7 +645,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     color: colors.text,
     fontSize: 16,
     minHeight: 48,
@@ -673,14 +671,14 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
     marginTop: 4
   },
   memberButton: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 48,
     justifyContent: "center",
     padding: 12

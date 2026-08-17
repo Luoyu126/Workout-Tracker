@@ -209,3 +209,42 @@ export function updateMySignup(eventId: string, status: SignupStatus, note?: str
     }
   });
 }
+
+export type EventCompletion = {
+  event_id: string;
+  status: string;
+  going_count: number;
+  reward_count: number;
+};
+
+export type EventCompletionInput = {
+  match_details?: Partial<{
+    team_score: MatchDetails["team_score"];
+    opponent_score: MatchDetails["opponent_score"];
+    result: MatchDetails["result"];
+    notes: string | null;
+  }> | null;
+};
+
+export function completeEvent(eventId: string, input: EventCompletionInput = {}) {
+  const request =
+    input.match_details === undefined
+      ? { method: "POST" as const }
+      : {
+          method: "POST" as const,
+          body: {
+            match_details:
+              input.match_details === null
+                ? null
+                : omitUndefined({
+                    team_score: input.match_details.team_score,
+                    opponent_score: input.match_details.opponent_score,
+                    result: input.match_details.result,
+                    notes: normalizeOptionalText(input.match_details.notes)
+                  })
+          }
+        };
+  return apiRequest<EventCompletion>(`/api/v1/events/${eventId}/complete`, {
+    ...request
+  });
+}

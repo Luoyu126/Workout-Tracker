@@ -19,7 +19,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
 from app.common.enums import (
-    AttendanceStatus,
     CoinRuleTrigger,
     CoinTransactionType,
     DevicePlatform,
@@ -137,21 +136,6 @@ class EventSignup(Base, TimestampMixin):
     note: Mapped[str | None] = mapped_column(Text)
 
 
-class Attendance(Base, TimestampMixin):
-    __tablename__ = "attendances"
-    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_attendance_event_user"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    event_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    status: Mapped[AttendanceStatus] = mapped_column(String(32), nullable=False)
-    recorded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    note: Mapped[str | None] = mapped_column(Text)
-
-
 class MatchDetails(Base, TimestampMixin):
     __tablename__ = "match_details"
 
@@ -208,8 +192,8 @@ class CoinTransaction(Base):
             "reference_type",
             "reference_id",
             unique=True,
-            postgresql_where=text("type = 'attendance_reward' AND reference_type = 'event'"),
-            sqlite_where=text("type = 'attendance_reward' AND reference_type = 'event'"),
+            postgresql_where=text("type = 'signup_reward' AND reference_type = 'event'"),
+            sqlite_where=text("type = 'signup_reward' AND reference_type = 'event'"),
         ),
         Index(
             "uq_coin_refund_team_user_redemption",

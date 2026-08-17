@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.enums import (
@@ -18,7 +18,7 @@ from app.events.service import (
     _get_match_details,
     _read_event_with_details,
 )
-from app.models import Attendance, CoinTransaction, Event, MatchLogEntry, User
+from app.models import CoinTransaction, Event, EventSignup, MatchLogEntry, User
 from app.teams.service import require_team_role
 
 
@@ -133,30 +133,22 @@ def match_summary(session: Session, event_id: UUID, user: User) -> dict[str, obj
     event = _get_match_event(session, event_id)
     _ensure_event_visible(session, event, user)
     logs = list_match_logs(session, event_id, user)
-    attendance = session.scalars(select(Attendance).where(Attendance.event_id == event_id)).all()
-    attendance_ids = [row.id for row in attendance]
-    reward_filters = [
-        (CoinTransaction.reference_type == "event") & (CoinTransaction.reference_id == event_id),
-    ]
-    if attendance_ids:
-        reward_filters.append(
-            (CoinTransaction.reference_type == "attendance_correction")
-            & (CoinTransaction.reference_id.in_(attendance_ids))
-        )
+    signups = session.scalars(select(EventSignup).where(EventSignup.event_id == event_id)).all()
     rewards = session.scalars(
         select(CoinTransaction).where(
             CoinTransaction.team_id == event.team_id,
-            CoinTransaction.type == CoinTransactionType.attendance_reward,
-            or_(*reward_filters),
+            CoinTransaction.type == CoinTransactionType.signup_reward,
+            CoinTransaction.reference_type == "event",
+            CoinTransaction.reference_id == event_id,
         )
     ).all()
     return {
         "event": _read_event_with_details(session, event),
         "match_details": _get_match_details(session, event.id),
         "counts": match_log_counts(logs),
-        "attendance": [
-            {"user_id": row.user_id, "status": enum_value(row.status), "recorded_at": row.recorded_at}
-            for row in attendance
+        "signups": [
+            {"user_id": row.user_id, "status": enum_value(row.status), "updated_at": row.updated_at}
+            for row in signups
         ],
         "rewards": [
             {"user_id": row.user_id, "amount": row.amount, "created_at": row.created_at}

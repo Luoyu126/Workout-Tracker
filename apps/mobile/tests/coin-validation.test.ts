@@ -38,10 +38,10 @@ describe("coin input validation", () => {
     expect(normalizeCoinReason("  ")).toBeNull();
   });
 
-  test("selects the same effective active attendance rule the backend uses for rewards", () => {
+  test("selects the same effective active signup rule the backend uses for rewards", () => {
     const olderActiveRule = {
       id: "older",
-      trigger_type: "training_attendance" as const,
+      trigger_type: "training_signup" as const,
       amount: 10,
       is_active: true,
       updated_at: "2026-08-10T10:00:00.000Z",
@@ -49,7 +49,7 @@ describe("coin input validation", () => {
     };
     const newerInactiveRule = {
       id: "inactive",
-      trigger_type: "training_attendance" as const,
+      trigger_type: "training_signup" as const,
       amount: 99,
       is_active: false,
       updated_at: "2026-08-12T10:00:00.000Z",
@@ -57,16 +57,16 @@ describe("coin input validation", () => {
     };
     const newerActiveRule = {
       id: "newer",
-      trigger_type: "training_attendance" as const,
+      trigger_type: "training_signup" as const,
       amount: 17,
       is_active: true,
       updated_at: "2026-08-11T10:00:00.000Z",
       created_at: "2026-08-11T10:00:00.000Z"
     };
 
-    expect(selectEffectiveCoinRule([olderActiveRule, newerInactiveRule, newerActiveRule], "training_attendance")).toBe(
+    expect(selectEffectiveCoinRule([olderActiveRule, newerInactiveRule, newerActiveRule], "training_signup")).toBe(
       newerActiveRule
     );
-    expect(selectEffectiveCoinRule([newerInactiveRule], "training_attendance")).toBeNull();
+    expect(selectEffectiveCoinRule([newerInactiveRule], "training_signup")).toBeNull();
   });
 });

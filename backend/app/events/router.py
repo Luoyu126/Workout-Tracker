@@ -8,6 +8,8 @@ from app.common.database import get_db
 from app.common.enums import EventStatus, EventType, SignupStatus
 from app.common.permissions import PermissionDeniedError
 from app.events.schemas import (
+    EventCompletionRead,
+    EventCompletionRequest,
     EventCreateRequest,
     EventRead,
     EventSignupRead,
@@ -20,6 +22,7 @@ from app.events.service import (
     EventNotFoundError,
     EventStateError,
     SignupRuleError,
+    complete_event,
     create_event,
     create_match,
     delete_event,
@@ -142,6 +145,19 @@ def post_publish_event(
     try:
         event = publish_event(session, event_id, user)
         return get_event_detail(session, event.id, user)
+    except Exception as exc:
+        raise _to_http_error(exc) from exc
+
+
+@router.post("/events/{event_id}/complete", response_model=EventCompletionRead)
+def post_complete_event(
+    event_id: UUID,
+    user: User = Depends(current_user),
+    session: Session = Depends(get_db),
+    payload: EventCompletionRequest | None = None,
+) -> dict[str, object]:
+    try:
+        return complete_event(session, event_id, user, payload or EventCompletionRequest())
     except Exception as exc:
         raise _to_http_error(exc) from exc
 

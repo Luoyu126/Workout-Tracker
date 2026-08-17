@@ -3,16 +3,16 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
-import { getTeamAttendanceBoard, type AttendanceBoardRow } from "@/features/attendance/api";
 import { parseOptionalIsoDateTime } from "@/features/events/validation";
+import { getTeamSignupBoard, type SignupBoardRow } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
-export default function TeamAttendanceBoardScreen() {
+export default function TeamSignupBoardScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
-  const [rows, setRows] = useState<AttendanceBoardRow[]>([]);
+  const [rows, setRows] = useState<SignupBoardRow[]>([]);
   const [startsAfter, setStartsAfter] = useState("");
   const [startsBefore, setStartsBefore] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -28,19 +28,19 @@ export default function TeamAttendanceBoardScreen() {
       (startsAfter.trim().length > 0 && parsedStartsAfter === null) ||
       (startsBefore.trim().length > 0 && parsedStartsBefore === null)
     ) {
-      setMessage(t("attendanceBoard.invalidDateTime"));
+      setMessage(t("signupBoard.invalidDateTime"));
       return;
     }
     setIsLoading(true);
     setMessage(null);
     try {
-      const nextRows = await getTeamAttendanceBoard(teamId, {
+      const nextRows = await getTeamSignupBoard(teamId, {
         startsAfter: parsedStartsAfter,
         startsBefore: parsedStartsBefore
       });
       setRows(nextRows);
       if (nextRows.length === 0) {
-        setMessage(t("attendanceBoard.noRows"));
+        setMessage(t("signupBoard.noRows"));
       }
     } catch (error) {
       setMessage(formatApiError(error, t));
@@ -57,14 +57,14 @@ export default function TeamAttendanceBoardScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{t("attendanceBoard.title")}</Text>
+      <Text style={styles.title}>{t("signupBoard.title")}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("attendanceBoard.filters")}</Text>
+        <Text style={styles.cardTitle}>{t("signupBoard.filters")}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
           onChangeText={setStartsAfter}
-          placeholder={t("attendanceBoard.startsAfter")}
+          placeholder={t("signupBoard.startsAfter")}
           placeholderTextColor={colors.muted}
           style={styles.input}
           value={startsAfter}
@@ -73,7 +73,7 @@ export default function TeamAttendanceBoardScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           onChangeText={setStartsBefore}
-          placeholder={t("attendanceBoard.startsBefore")}
+          placeholder={t("signupBoard.startsBefore")}
           placeholderTextColor={colors.muted}
           style={styles.input}
           value={startsBefore}
@@ -85,7 +85,7 @@ export default function TeamAttendanceBoardScreen() {
         onPress={handleLoadBoard}
         style={[styles.button, isLoading && styles.disabled]}
       >
-        <Text style={styles.buttonText}>{t("attendanceBoard.load")}</Text>
+        <Text style={styles.buttonText}>{t("signupBoard.load")}</Text>
       </Pressable>
       <ScreenState
         isLoading={isLoading}
@@ -100,13 +100,13 @@ export default function TeamAttendanceBoardScreen() {
         <View key={row.user_id} style={styles.card}>
           <Text style={styles.cardTitle}>{row.user?.name ?? row.user?.email ?? row.user_id}</Text>
           {row.user ? <Text style={styles.muted}>{row.user.email}</Text> : null}
-          <Text style={styles.rate}>{Math.round(row.attendance_rate * 100)}%</Text>
+          <Text style={styles.rate}>{Math.round(row.going_rate * 100)}%</Text>
           <Text style={styles.muted}>
-            {t("attendance.present")} {row.present} · {t("attendance.late")} {row.late} ·{" "}
-            {t("attendance.absent")} {row.absent} · {t("attendance.excused")} {row.excused}
+            {t("signupBoard.going")} {row.going} · {t("signupBoard.maybe")} {row.maybe} ·{" "}
+            {t("signupBoard.notGoing")} {row.not_going}
           </Text>
           <Text style={styles.muted}>
-            {t("attendanceBoard.total")} {row.total}
+            {t("signupBoard.total")} {row.total}
           </Text>
         </View>
       ))}
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -129,18 +129,18 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
     padding: 16
   },
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     color: colors.text,
     fontSize: 16,
     minHeight: 48,

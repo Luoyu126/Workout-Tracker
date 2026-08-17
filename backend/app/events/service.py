@@ -4,16 +4,19 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.coins.service import issue_signup_reward
 from app.common.enums import (
     EventStatus,
     EventType,
     MembershipRole,
+    MembershipStatus,
     NotificationType,
     SignupStatus,
     enum_value,
 )
 from app.common.permissions import PermissionDeniedError, role_at_least
 from app.events.schemas import (
+    EventCompletionRequest,
     EventCreateRequest,
     EventSignupUpsertRequest,
     EventUpdateRequest,
@@ -21,7 +24,7 @@ from app.events.schemas import (
     validate_match_score_result,
     validate_schedule_window,
 )
-from app.models import Attendance, Event, EventSignup, MatchDetails, MatchLogEntry, User
+from app.models import Event, EventSignup, MatchDetails, MatchLogEntry, TeamMembership, User
 from app.notifications.service import create_team_notifications
 from app.teams.service import get_active_membership, require_team_role
 
@@ -369,11 +372,105 @@ def delete_event(session: Session, event_id: UUID, user: User) -> None:
             reference_id=None,
         )
     session.execute(delete(EventSignup).where(EventSignup.event_id == event.id))
-    session.execute(delete(Attendance).where(Attendance.event_id == event.id))
     session.execute(delete(MatchLogEntry).where(MatchLogEntry.event_id == event.id))
     session.execute(delete(MatchDetails).where(MatchDetails.event_id == event.id))
     session.delete(event)
     session.commit()
+
+
+def _apply_completion_match_details(
+    session: Session,
+    event: Event,
+    payload: EventCompletionRequest,
+) -> None:
+    if payload.match_details is None:
+        return
+    if event.type != EventType.match:
+        raise EventStateError("Only match events can include final match details")
+    match_details = _get_match_details(session, event.id)
+    if match_details is None:
+        raise EventStateError("Match details are required before completing a match")
+    match_update_data = payload.match_details.model_dump(exclude_unset=True)
+    try:
+        validate_match_score_result(
+            match_update_data.get("team_score", match_details.team_score),
+            match_update_data.get("opponent_score", match_details.opponent_score),
+            match_update_data.get("result", match_details.result),
+        )
+    except ValueError as exc:
+        raise EventStateError(str(exc)) from exc
+    for field, value in match_update_data.items():
+        setattr(match_details, field, value)
+
+
+def _eligible_member_ids_for_event(session: Session, event: Event) -> list[UUID]:
+    return list(
+        session.scalars(
+            select(TeamMembership.user_id).where(
+                TeamMembership.team_id == event.team_id,
+                TeamMembership.joined_at <= event.start_time,
+                (
+                    (TeamMembership.status == MembershipStatus.active)
+                    | (
+                        TeamMembership.left_at.is_not(None)
+                        & (TeamMembership.left_at >= event.start_time)
+                    )
+                ),
+            )
+        ).all()
+    )
+
+
+def complete_event(
+    session: Session,
+    event_id: UUID,
+    user: User,
+    payload: EventCompletionRequest | None = None,
+) -> dict[str, object]:
+    completion_payload = payload or EventCompletionRequest()
+    event = _get_event_for_update(session, event_id)
+    require_team_role(session, event.team_id, user.id, MembershipRole.captain)
+
+    eligible_member_ids = _eligible_member_ids_for_event(session, event)
+    signup_by_user_id = {
+        signup.user_id: signup.status
+        for signup in session.scalars(select(EventSignup).where(EventSignup.event_id == event.id)).all()
+    }
+
+    def _status_for(member_id: UUID) -> SignupStatus:
+        return signup_by_user_id.get(member_id, SignupStatus.maybe)
+
+    if event.status == EventStatus.completed:
+        going_count = sum(1 for member_id in eligible_member_ids if _status_for(member_id) == SignupStatus.going)
+        return {
+            "event_id": event.id,
+            "status": enum_value(event.status),
+            "going_count": going_count,
+            "reward_count": 0,
+        }
+    if event.status != EventStatus.published:
+        raise EventStateError("Only published events can be completed")
+
+    _apply_completion_match_details(session, event, completion_payload)
+
+    reward_count = 0
+    going_count = 0
+    for member_id in eligible_member_ids:
+        signup_status = _status_for(member_id)
+        if signup_status == SignupStatus.going:
+            going_count += 1
+        reward = issue_signup_reward(session, event, member_id, signup_status, user.id)
+        if reward is not None:
+            reward_count += 1
+
+    event.status = EventStatus.completed
+    session.commit()
+    return {
+        "event_id": event.id,
+        "status": enum_value(event.status),
+        "going_count": going_count,
+        "reward_count": reward_count,
+    }
 
 
 def get_my_signup(session: Session, event_id: UUID, user: User) -> EventSignup | dict[str, object]:

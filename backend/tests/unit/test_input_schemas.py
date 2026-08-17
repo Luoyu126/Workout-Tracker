@@ -5,16 +5,16 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.attendance.schemas import AttendanceUpsertRequest
 from app.coins.schemas import (
     CoinRuleCreateRequest,
     CoinTransactionCreateRequest,
     CoinTransactionRead,
 )
-from app.common.enums import CoinRuleTrigger, CoinTransactionType, EventType, MatchEntryType
+from app.common.enums import CoinRuleTrigger, CoinTransactionType, EventType, MatchEntryType, SignupStatus
 from app.events.match_schemas import MatchLogEntryCreateRequest
 from app.events.schemas import (
     EventCreateRequest,
+    EventSignupUpsertRequest,
     EventUpdateRequest,
     MatchDetailsCreateRequest,
     MatchDetailsUpdateRequest,
@@ -32,7 +32,7 @@ def test_core_required_text_fields_are_stripped() -> None:
     assert (
         CoinRuleCreateRequest(
             name="  训练奖励  ",
-            trigger_type=CoinRuleTrigger.training_attendance,
+            trigger_type=CoinRuleTrigger.training_signup,
             amount=10,
         ).name
         == "训练奖励"
@@ -66,7 +66,7 @@ def test_coin_transaction_read_serializes_public_metadata_field_from_internal_at
 
 def test_manual_coin_transaction_create_rejects_system_transaction_types() -> None:
     for transaction_type in (
-        CoinTransactionType.attendance_reward,
+        CoinTransactionType.signup_reward,
         CoinTransactionType.redemption,
         CoinTransactionType.refund,
     ):
@@ -88,7 +88,7 @@ def test_core_required_text_fields_reject_blank_strings() -> None:
         lambda: StoreItemCreateRequest(name="   ", price=10),
         lambda: CoinRuleCreateRequest(
             name="   ",
-            trigger_type=CoinRuleTrigger.training_attendance,
+            trigger_type=CoinRuleTrigger.training_signup,
             amount=10,
         ),
         lambda: TeamAnnouncementRequest(id=uuid4(), title="   ", body="正文"),
@@ -121,9 +121,9 @@ def test_match_log_required_player_fields_reject_blank_strings() -> None:
     assert payload.player_number == "9"
 
 
-def test_attendance_note_is_stripped_and_blank_note_becomes_none() -> None:
-    assert AttendanceUpsertRequest(status="present", note="  准时  ").note == "准时"
-    assert AttendanceUpsertRequest(status="absent", note="   ").note is None
+def test_signup_note_is_stripped_and_blank_note_becomes_none() -> None:
+    assert EventSignupUpsertRequest(status=SignupStatus.going, note="  准时  ").note == "准时"
+    assert EventSignupUpsertRequest(status=SignupStatus.maybe, note="   ").note is None
 
 
 def test_core_optional_text_fields_are_stripped_and_blank_becomes_none() -> None:

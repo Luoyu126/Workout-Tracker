@@ -420,15 +420,13 @@ describe("apiRequest", () => {
       "GET /api/v1/events/{event_id}/signup",
       "PUT /api/v1/events/{event_id}/signup",
       "GET /api/v1/events/{event_id}/signups",
-      "GET /api/v1/events/{event_id}/attendance",
-      "PUT /api/v1/events/{event_id}/attendance/{user_id}",
       "POST /api/v1/events/{event_id}/complete",
       "GET /api/v1/events/{event_id}/live-board",
       "GET /api/v1/events/{event_id}/match-logs",
       "POST /api/v1/events/{event_id}/match-logs",
       "DELETE /api/v1/match-logs/{log_id}",
       "GET /api/v1/events/{event_id}/summary",
-      "GET /api/v1/teams/{team_id}/attendance-board",
+      "GET /api/v1/teams/{team_id}/signup-board",
       "GET /api/v1/teams/{team_id}/coins/balance",
       "GET /api/v1/teams/{team_id}/coins/transactions",
       "GET /api/v1/teams/{team_id}/members/{user_id}/coin-transactions",
@@ -520,11 +518,11 @@ describe("apiRequest", () => {
     expect(schemaProperties("EventSignupRead")).toEqual(
       expect.arrayContaining(["user", "status", "note", "created_at", "updated_at"])
     );
-    expect(schemaProperties("AttendanceRead")).toEqual(
-      expect.arrayContaining(["user", "status", "recorded_by", "recorded_at", "note"])
+    expect(schemaProperties("EventCompletionRead")).toEqual(
+      expect.arrayContaining(["event_id", "status", "going_count", "reward_count"])
     );
-    expect(schemaProperties("AttendanceBoardRow")).toEqual(
-      expect.arrayContaining(["user", "present", "late", "absent", "excused", "total", "attendance_rate"])
+    expect(schemaProperties("SignupBoardRow")).toEqual(
+      expect.arrayContaining(["user", "going", "maybe", "not_going", "total", "going_rate"])
     );
     expect(schemaProperties("RedemptionRead")).toEqual(
       expect.arrayContaining(["user", "quantity", "unit_price", "total_price", "status", "fulfilled_at"])
@@ -533,7 +531,14 @@ describe("apiRequest", () => {
       expect.arrayContaining(["type", "reference_type", "reference_id", "read_at", "expires_at"])
     );
     expect(schemaProperties("TeamHomeRead")).toEqual(
-      expect.arrayContaining(["team", "current_membership", "captains", "upcoming_events", "coin_summary"])
+      expect.arrayContaining([
+        "team",
+        "current_membership",
+        "captains",
+        "upcoming_events",
+        "signup_summary",
+        "coin_summary"
+      ])
     );
     expect(schemaProperties("MembershipRead")).toEqual(
       expect.arrayContaining(["user", "role", "status", "jersey_number", "position", "left_at"])

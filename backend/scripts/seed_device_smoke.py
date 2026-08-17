@@ -254,7 +254,6 @@ def seed_device_smoke(session: Session) -> DeviceSmokeSeedResult:
         admin_name=settings.bootstrap_admin_name,
         training_reward=settings.bootstrap_training_reward,
         match_reward=settings.bootstrap_match_reward,
-        late_reward=settings.bootstrap_late_reward,
     )
 
     team = session.get(Team, bootstrap_result.team_id)
@@ -267,25 +266,17 @@ def seed_device_smoke(session: Session) -> DeviceSmokeSeedResult:
         session,
         bootstrap_result.team_id,
         bootstrap_result.admin_id,
-        "Training attendance",
-        CoinRuleTrigger.training_attendance,
+        "Training signup",
+        CoinRuleTrigger.training_signup,
         settings.bootstrap_training_reward,
     )
     _ensure_reward_rule(
         session,
         bootstrap_result.team_id,
         bootstrap_result.admin_id,
-        "Match attendance",
-        CoinRuleTrigger.match_attendance,
+        "Match signup",
+        CoinRuleTrigger.match_signup,
         settings.bootstrap_match_reward,
-    )
-    _ensure_reward_rule(
-        session,
-        bootstrap_result.team_id,
-        bootstrap_result.admin_id,
-        "Late attendance",
-        CoinRuleTrigger.late_attendance,
-        settings.bootstrap_late_reward,
     )
     training = _ensure_published_event(
         session,

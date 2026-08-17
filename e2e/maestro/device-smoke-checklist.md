@@ -93,7 +93,7 @@ Before starting the device smoke path:
 - [ ] Sign up or sign in with Supabase email/password.
 - [ ] If prompted, sync the user profile and confirm name, student ID, and avatar URL fields can be saved.
 - [ ] Open `我的球队` and confirm the expected active team is visible.
-- [ ] Open the team home and confirm member count, captains, upcoming events, attendance summary, coin summary, and team logo/image surfaces render without crashing.
+- [ ] Open the team home and confirm member count, captains, upcoming events, signup summary, coin summary, and team logo/image surfaces render without crashing.
 - [ ] Open team Inbox and confirm unread count/list load.
 - [ ] Register a native Expo Push Token or use the manual token fallback, then confirm the token appears saved.
 - [ ] As a captain/admin, publish a team announcement and confirm active team members receive an Inbox notification.
@@ -104,13 +104,12 @@ Before starting the device smoke path:
 - [ ] Confirm the live board refreshes and shows localized match log labels.
 - [ ] As captain/admin, delete a match log and confirm the destructive confirmation dialog appears before deletion.
 - [ ] As a member, reopen the same live board and confirm match logs are read-only.
-- [ ] Complete attendance from the attendance screen.
-- [ ] Confirm missing active members are marked `absent` at completion.
+- [ ] As captain/admin, complete the published event and confirm signup rewards for `going` members; missing signups are treated as `maybe` and are not rewarded.
 - [ ] Confirm completed events cannot be edited or deleted from the event detail page.
-- [ ] Correct a completed attendance record from `present` or `late` to `absent` and confirm coins are clawed back; negative balances are allowed.
-- [ ] Open the attendance board and confirm completed-event rows and date filters load.
+- [ ] Confirm there is no post-completion attendance correction path; use manual coin adjustment when negative balances are allowed.
+- [ ] Open the signup board and confirm completed-event rows and date filters load.
 - [ ] Open the coins screen and confirm balance, ledger, reward rules, member quick-select, and admin adjustment surfaces load.
-- [ ] As captain/admin, update training, match, and late reward rule amounts.
+- [ ] As captain/admin, update training and match signup reward rule amounts.
 - [ ] Open the store and confirm active items, item images, quantity input, and redemption history load.
 - [ ] Redeem an active item as a member and confirm coins are deducted and finite stock is reduced.
 - [ ] As captain/admin, fulfill the redemption and confirm the member receives a `redemption_completed` Inbox notification.

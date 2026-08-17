@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   container: {
     gap: 14,
     padding: 20,
-    paddingTop: 72
+    paddingTop: 16
   },
   title: {
     color: colors.text,
@@ -184,18 +184,18 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 52,
     justifyContent: "center"
   },
   buttonText: {
-    color: "#ffffff",
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: "800"
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
     padding: 16
   },
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   itemImage: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     height: 220,
     width: "100%"
   },
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     color: colors.text,
     fontSize: 16,
     minHeight: 48,
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
     marginTop: 4
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   smallButton: {
     alignItems: "center",
     backgroundColor: colors.background,
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
     minWidth: "48%",

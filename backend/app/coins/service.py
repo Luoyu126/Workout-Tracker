@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.coins.schemas import (
@@ -10,15 +10,15 @@ from app.coins.schemas import (
     CoinTransactionCreateRequest,
 )
 from app.common.enums import (
-    AttendanceStatus,
     CoinRuleTrigger,
     CoinTransactionType,
     EventType,
     MembershipRole,
     NotificationType,
+    SignupStatus,
     enum_value,
 )
-from app.models import Attendance, CoinRule, CoinTransaction, Event, User
+from app.models import CoinRule, CoinTransaction, Event, User
 from app.notifications.service import create_user_notification
 from app.teams.service import get_active_membership, require_team_role
 
@@ -35,14 +35,12 @@ class CoinTransactionConflictError(Exception):
     pass
 
 
-def reward_amount_for_attendance(session: Session, event: Event, attendance_status: AttendanceStatus) -> int:
+def reward_amount_for_signup(session: Session, event: Event, signup_status: SignupStatus) -> int:
     trigger_type: CoinRuleTrigger | None = None
-    if attendance_status == AttendanceStatus.late:
-        trigger_type = CoinRuleTrigger.late_attendance
-    elif attendance_status == AttendanceStatus.present and event.type == EventType.training:
-        trigger_type = CoinRuleTrigger.training_attendance
-    elif attendance_status == AttendanceStatus.present and event.type == EventType.match:
-        trigger_type = CoinRuleTrigger.match_attendance
+    if signup_status == SignupStatus.going and event.type == EventType.training:
+        trigger_type = CoinRuleTrigger.training_signup
+    elif signup_status == SignupStatus.going and event.type == EventType.match:
+        trigger_type = CoinRuleTrigger.match_signup
 
     if trigger_type is None:
         return 0
@@ -212,41 +210,22 @@ def create_manual_coin_transaction(
     return transaction
 
 
-def current_event_reward_total(session: Session, event: Event, attendance: Attendance) -> int:
-    return session.scalar(
-        select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
-            CoinTransaction.team_id == event.team_id,
-            CoinTransaction.user_id == attendance.user_id,
-            CoinTransaction.type == CoinTransactionType.attendance_reward,
-            or_(
-                (
-                    (CoinTransaction.reference_type == "event")
-                    & (CoinTransaction.reference_id == event.id)
-                ),
-                (
-                    (CoinTransaction.reference_type == "attendance_correction")
-                    & (CoinTransaction.reference_id == attendance.id)
-                ),
-            ),
-        )
-    ) or 0
-
-
-def issue_initial_attendance_reward(
+def issue_signup_reward(
     session: Session,
     event: Event,
-    attendance: Attendance,
+    user_id: UUID,
+    signup_status: SignupStatus,
     created_by: UUID,
 ) -> CoinTransaction | None:
-    amount = reward_amount_for_attendance(session, event, attendance.status)
+    amount = reward_amount_for_signup(session, event, signup_status)
     if amount == 0:
         return None
 
     existing = session.scalar(
         select(CoinTransaction).where(
             CoinTransaction.team_id == event.team_id,
-            CoinTransaction.user_id == attendance.user_id,
-            CoinTransaction.type == CoinTransactionType.attendance_reward,
+            CoinTransaction.user_id == user_id,
+            CoinTransaction.type == CoinTransactionType.signup_reward,
             CoinTransaction.reference_type == "event",
             CoinTransaction.reference_id == event.id,
         )
@@ -256,66 +235,24 @@ def issue_initial_attendance_reward(
 
     transaction = CoinTransaction(
         team_id=event.team_id,
-        user_id=attendance.user_id,
+        user_id=user_id,
         amount=amount,
-        type=CoinTransactionType.attendance_reward,
-        reason=f"Attendance reward for {event.title}",
+        type=CoinTransactionType.signup_reward,
+        reason=f"Signup reward for {event.title}",
         reference_type="event",
         reference_id=event.id,
         created_by=created_by,
-        metadata_={"attendance_id": str(attendance.id), "status": enum_value(attendance.status)},
+        metadata_={"status": enum_value(signup_status)},
     )
     session.add(transaction)
     session.flush()
     create_user_notification(
         session,
-        attendance.user_id,
+        user_id,
         event.team_id,
         NotificationType.coin_earned,
         title="金币已到账",
-        body=f"{event.title} 出勤奖励 {amount} 金币。",
-        reference_type="coin_transaction",
-        reference_id=transaction.id,
-    )
-    return transaction
-
-
-def reconcile_completed_attendance_reward(
-    session: Session,
-    event: Event,
-    attendance: Attendance,
-    created_by: UUID,
-) -> CoinTransaction | None:
-    target_amount = reward_amount_for_attendance(session, event, attendance.status)
-    current_amount = current_event_reward_total(session, event, attendance)
-    delta = target_amount - current_amount
-    if delta == 0:
-        return None
-
-    transaction = CoinTransaction(
-        team_id=event.team_id,
-        user_id=attendance.user_id,
-        amount=delta,
-        type=CoinTransactionType.attendance_reward,
-        reason=f"Attendance correction for {event.title}",
-        reference_type="attendance_correction",
-        reference_id=attendance.id,
-        created_by=created_by,
-        metadata_={"event_id": str(event.id), "status": enum_value(attendance.status)},
-    )
-    session.add(transaction)
-    session.flush()
-    if delta > 0:
-        body = f"{event.title} 考勤修正补发 {delta} 金币。"
-    else:
-        body = f"{event.title} 考勤修正追回 {abs(delta)} 金币。"
-    create_user_notification(
-        session,
-        attendance.user_id,
-        event.team_id,
-        NotificationType.coin_earned,
-        title="金币已更新",
-        body=body,
+        body=f"{event.title} 报名奖励 {amount} 金币。",
         reference_type="coin_transaction",
         reference_id=transaction.id,
     )

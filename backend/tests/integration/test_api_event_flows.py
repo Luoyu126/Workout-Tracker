@@ -8,11 +8,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.attendance.router import post_complete_event, put_attendance, read_attendance
-from app.attendance.schemas import AttendanceUpsertRequest, EventCompletionRequest
 from app.common.database import Base
 from app.common.enums import (
-    AttendanceStatus,
     EventStatus,
     EventType,
     MatchEntryType,
@@ -26,6 +23,7 @@ from app.events.match_schemas import MatchLogEntryCreateRequest
 from app.events.router import (
     delete_event_route,
     patch_event,
+    post_complete_event,
     post_event,
     post_match,
     post_publish_event,
@@ -36,6 +34,7 @@ from app.events.router import (
     read_signups,
 )
 from app.events.schemas import (
+    EventCompletionRequest,
     EventCreateRequest,
     EventSignupUpsertRequest,
     EventUpdateRequest,
@@ -44,7 +43,6 @@ from app.events.schemas import (
     MatchDetailsUpdateRequest,
 )
 from app.models import (
-    Attendance,
     CoinTransaction,
     Event,
     EventSignup,
@@ -391,14 +389,6 @@ def test_delete_published_match_physically_removes_dependent_records(session: Se
         player,
         session,
     )
-    attendance = Attendance(
-        event_id=event_id,
-        user_id=player.id,
-        status=AttendanceStatus.present,
-        recorded_by=captain.id,
-    )
-    session.add(attendance)
-    session.commit()
     log = post_match_log(
         event_id,
         MatchLogEntryCreateRequest(
@@ -417,7 +407,6 @@ def test_delete_published_match_physically_removes_dependent_records(session: Se
 
     assert session.get(Event, event_id) is None
     assert session.get(EventSignup, signup.id) is None
-    assert session.get(Attendance, attendance.id) is None
     assert session.get(MatchDetails, match_details.id) is None
     assert session.get(MatchLogEntry, log.id) is None
     delete_notifications = session.scalars(
@@ -446,13 +435,8 @@ def test_event_router_keeps_drafts_hidden_from_members_even_with_explicit_filter
     assert signup_exc.value.status_code == 403
     assert signup_exc.value.detail["code"] == "EVENT_PERMISSION_DENIED"
 
-    with pytest.raises(HTTPException) as attendance_exc:
-        read_attendance(draft.id, player, session)
-    assert attendance_exc.value.status_code == 403
-    assert attendance_exc.value.detail["code"] == "ATTENDANCE_PERMISSION_DENIED"
 
-
-def test_other_team_captain_cannot_manage_events_or_attendance(session: Session) -> None:
+def test_other_team_captain_cannot_manage_events_or_completion(session: Session) -> None:
     _team_a, team_a_captain, _team_a_player = _seed_team(session)
     team_b, team_b_captain, team_b_player = _seed_other_team(session)
 
@@ -475,21 +459,10 @@ def test_other_team_captain_cannot_manage_events_or_attendance(session: Session)
     assert delete_exc.value.status_code == 403
     assert delete_exc.value.detail["code"] == "EVENT_PERMISSION_DENIED"
 
-    with pytest.raises(HTTPException) as attendance_exc:
-        put_attendance(
-            published.id,
-            team_b_player.id,
-            AttendanceUpsertRequest(status=AttendanceStatus.present),
-            team_a_captain,
-            session,
-        )
-    assert attendance_exc.value.status_code == 403
-    assert attendance_exc.value.detail["code"] == "ATTENDANCE_PERMISSION_DENIED"
-
     with pytest.raises(HTTPException) as complete_exc:
         post_complete_event(published.id, team_a_captain, session)
     assert complete_exc.value.status_code == 403
-    assert complete_exc.value.detail["code"] == "ATTENDANCE_PERMISSION_DENIED"
+    assert complete_exc.value.detail["code"] == "EVENT_PERMISSION_DENIED"
 
 
 def test_match_creation_notifies_active_team_members(session: Session) -> None:
@@ -518,31 +491,19 @@ def test_match_creation_notifies_active_team_members(session: Session) -> None:
     assert all(payload.start_time.isoformat() in notification.body for notification in notifications)
 
 
-def test_attendance_and_signup_reads_include_user_summary_for_mobile_lists(session: Session) -> None:
+def test_signup_reads_include_user_summary_for_mobile_lists(session: Session) -> None:
     team, captain, player = _seed_team(session)
     event = post_event(team.id, _event_payload("名单展示训练"), captain, session)
     post_publish_event(event.id, captain, session)
 
-    put_my_signup(
+    saved_signup = put_my_signup(
         event.id,
         EventSignupUpsertRequest(status=SignupStatus.going),
         player,
         session,
     )
-    saved_attendance = put_attendance(
-        event.id,
-        player.id,
-        AttendanceUpsertRequest(status=AttendanceStatus.present),
-        captain,
-        session,
-    )
-
-    assert saved_attendance["user"]["name"] == player.name
-    assert saved_attendance["user"]["email"] == player.email
-
-    attendance_rows = read_attendance(event.id, captain, session)
-    assert attendance_rows[0]["user"]["name"] == player.name
-    assert attendance_rows[0]["user"]["email"] == player.email
+    assert saved_signup.user_id == player.id
+    assert saved_signup.status == SignupStatus.going
 
     signup_rows = read_signups(event.id, None, captain, session)
     assert signup_rows[0]["user"]["name"] == player.name
@@ -577,18 +538,16 @@ def test_completed_event_router_blocks_update_and_delete(session: Session) -> No
     team, captain, player = _seed_team(session)
     event = post_event(team.id, _event_payload("完成后不可修改"), captain, session)
     post_publish_event(event.id, captain, session)
-    session.add(
-        Attendance(
-            event_id=event.id,
-            user_id=player.id,
-            status=AttendanceStatus.present,
-            recorded_by=captain.id,
-        )
+    put_my_signup(
+        event.id,
+        EventSignupUpsertRequest(status=SignupStatus.going),
+        player,
+        session,
     )
-    session.commit()
 
     completion = post_complete_event(event.id, captain, session)
     assert completion["status"] == EventStatus.completed
+    assert completion["going_count"] == 1
 
     with pytest.raises(HTTPException) as patch_exc:
         patch_event(event.id, EventUpdateRequest(title="非法修改"), captain, session)
@@ -616,15 +575,12 @@ def test_match_completion_accepts_final_match_details(session: Session) -> None:
     event = session.get(Event, event_response["id"])
     assert event is not None
     post_publish_event(event.id, captain, session)
-    session.add(
-        Attendance(
-            event_id=event.id,
-            user_id=player.id,
-            status=AttendanceStatus.present,
-            recorded_by=captain.id,
-        )
+    put_my_signup(
+        event.id,
+        EventSignupUpsertRequest(status=SignupStatus.going),
+        player,
+        session,
     )
-    session.commit()
 
     completion = post_complete_event(
         event.id,
@@ -691,15 +647,12 @@ def test_match_completion_rejects_result_that_does_not_match_score(session: Sess
     event = session.get(Event, event_response["id"])
     assert event is not None
     post_publish_event(event.id, captain, session)
-    session.add(
-        Attendance(
-            event_id=event.id,
-            user_id=player.id,
-            status=AttendanceStatus.present,
-            recorded_by=captain.id,
-        )
+    put_my_signup(
+        event.id,
+        EventSignupUpsertRequest(status=SignupStatus.going),
+        player,
+        session,
     )
-    session.commit()
 
     with pytest.raises(HTTPException) as complete_exc:
         post_complete_event(
@@ -716,7 +669,7 @@ def test_match_completion_rejects_result_that_does_not_match_score(session: Sess
         )
 
     assert complete_exc.value.status_code == 409
-    assert complete_exc.value.detail["code"] == "ATTENDANCE_STATE_CONFLICT"
+    assert complete_exc.value.detail["code"] == "EVENT_STATE_CONFLICT"
     session.refresh(event)
     assert event.status == EventStatus.published
     match_details = session.scalar(select(MatchDetails).where(MatchDetails.event_id == event.id))
@@ -724,9 +677,7 @@ def test_match_completion_rejects_result_that_does_not_match_score(session: Sess
     assert match_details.team_score is None
     assert match_details.opponent_score is None
     assert match_details.result is None
-    attendance_rows = session.scalars(select(Attendance).where(Attendance.event_id == event.id)).all()
-    assert len(attendance_rows) == 1
-    assert attendance_rows[0].user_id == player.id
+    assert session.scalars(select(EventSignup).where(EventSignup.event_id == event.id)).one().status == SignupStatus.going
     assert session.scalars(select(CoinTransaction).where(CoinTransaction.reference_id == event.id)).all() == []
 
 
@@ -734,15 +685,12 @@ def test_training_completion_rejects_match_details_without_completing(session: S
     team, captain, player = _seed_team(session)
     event = post_event(team.id, _event_payload("训练不能带比分"), captain, session)
     post_publish_event(event.id, captain, session)
-    session.add(
-        Attendance(
-            event_id=event.id,
-            user_id=player.id,
-            status=AttendanceStatus.present,
-            recorded_by=captain.id,
-        )
+    put_my_signup(
+        event.id,
+        EventSignupUpsertRequest(status=SignupStatus.going),
+        player,
+        session,
     )
-    session.commit()
 
     with pytest.raises(HTTPException) as complete_exc:
         post_complete_event(
@@ -759,13 +707,11 @@ def test_training_completion_rejects_match_details_without_completing(session: S
         )
 
     assert complete_exc.value.status_code == 409
-    assert complete_exc.value.detail["code"] == "ATTENDANCE_STATE_CONFLICT"
+    assert complete_exc.value.detail["code"] == "EVENT_STATE_CONFLICT"
     assert "match events" in complete_exc.value.detail["message"]
     session.refresh(event)
     assert event.status == EventStatus.published
-    attendance_rows = session.scalars(select(Attendance).where(Attendance.event_id == event.id)).all()
-    assert len(attendance_rows) == 1
-    assert attendance_rows[0].user_id == player.id
+    assert session.scalars(select(EventSignup).where(EventSignup.event_id == event.id)).one().status == SignupStatus.going
     assert session.scalars(select(CoinTransaction).where(CoinTransaction.reference_id == event.id)).all() == []
 
 
@@ -866,41 +812,6 @@ def test_inactive_member_cannot_read_or_update_event_signup(session: Session) ->
     assert session.scalars(select(EventSignup).where(EventSignup.event_id == event.id)).all() == []
 
 
-def test_completed_event_rejects_new_attendance_for_inactive_member_without_existing_row(
-    session: Session,
-) -> None:
-    team, captain, _ = _seed_team(session)
-    inactive_player = _user("Inactive Attendance Player")
-    session.add(inactive_player)
-    session.flush()
-    session.add(
-        TeamMembership(
-            team_id=team.id,
-            user_id=inactive_player.id,
-            role=MembershipRole.member,
-            status=MembershipStatus.inactive,
-        )
-    )
-    event = post_event(team.id, _event_payload("完成后非活跃不可新增考勤"), captain, session)
-    post_publish_event(event.id, captain, session)
-    post_complete_event(event.id, captain, session)
-
-    with pytest.raises(HTTPException) as attendance_exc:
-        put_attendance(
-            event.id,
-            inactive_player.id,
-            AttendanceUpsertRequest(status=AttendanceStatus.present),
-            captain,
-            session,
-        )
-
-    assert attendance_exc.value.status_code == 403
-    assert attendance_exc.value.detail["code"] == "ATTENDANCE_PERMISSION_DENIED"
-    assert session.scalars(
-        select(Attendance).where(Attendance.event_id == event.id, Attendance.user_id == inactive_player.id)
-    ).all() == []
-
-
 def test_event_signup_without_deadline_rejects_after_start_time(session: Session) -> None:
     team, captain, player = _seed_team(session)
     event = post_event(
@@ -940,15 +851,6 @@ def test_completed_event_router_blocks_signup_changes(session: Session) -> None:
         player,
         session,
     )
-    session.add(
-        Attendance(
-            event_id=event.id,
-            user_id=player.id,
-            status=AttendanceStatus.present,
-            recorded_by=captain.id,
-        )
-    )
-    session.commit()
     post_complete_event(event.id, captain, session)
 
     with pytest.raises(HTTPException) as signup_exc:

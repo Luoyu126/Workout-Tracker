@@ -58,7 +58,6 @@ def test_bootstrap_creates_initial_team_admin_and_default_coin_rules(session: Se
         admin_name="Admin",
         training_reward=10,
         match_reward=20,
-        late_reward=5,
     )
 
     organization = session.get(Organization, result.organization_id)
@@ -81,9 +80,8 @@ def test_bootstrap_creates_initial_team_admin_and_default_coin_rules(session: Se
     assert membership.role == MembershipRole.admin
     assert membership.status == MembershipStatus.active
     assert {rule.trigger_type: rule.amount for rule in rules} == {
-        CoinRuleTrigger.training_attendance: 10,
-        CoinRuleTrigger.match_attendance: 20,
-        CoinRuleTrigger.late_attendance: 5,
+        CoinRuleTrigger.training_signup: 10,
+        CoinRuleTrigger.match_signup: 20,
     }
 
 
@@ -98,7 +96,6 @@ def test_bootstrap_strips_required_text_fields(session: Session) -> None:
         admin_name="  Admin  ",
         training_reward=10,
         match_reward=20,
-        late_reward=5,
     )
 
     organization = session.get(Organization, result.organization_id)
@@ -127,7 +124,6 @@ def test_bootstrap_rejects_blank_required_text_fields(session: Session) -> None:
             admin_name="Admin",
             training_reward=10,
             match_reward=20,
-            late_reward=5,
         )
 
 
@@ -143,12 +139,11 @@ def test_bootstrap_is_idempotent_and_preserves_existing_coin_rules(session: Sess
         admin_name="Old Admin",
         training_reward=10,
         match_reward=20,
-        late_reward=5,
     )
     training_rule = session.scalar(
         select(CoinRule).where(
             CoinRule.team_id == first.team_id,
-            CoinRule.trigger_type == CoinRuleTrigger.training_attendance,
+            CoinRule.trigger_type == CoinRuleTrigger.training_signup,
         )
     )
     assert training_rule is not None
@@ -165,7 +160,6 @@ def test_bootstrap_is_idempotent_and_preserves_existing_coin_rules(session: Sess
         admin_name="New Admin",
         training_reward=1,
         match_reward=2,
-        late_reward=3,
     )
 
     assert second == first
@@ -173,7 +167,7 @@ def test_bootstrap_is_idempotent_and_preserves_existing_coin_rules(session: Sess
     assert _count(session, Team) == 1
     assert _count(session, User) == 1
     assert _count(session, TeamMembership) == 1
-    assert _count(session, CoinRule) == 3
+    assert _count(session, CoinRule) == 2
     assert training_rule.amount == 99
     admin = session.get(User, first.admin_id)
     assert admin is not None
@@ -214,7 +208,6 @@ def test_bootstrap_reactivates_and_promotes_existing_admin_membership(session: S
         admin_name="Admin",
         training_reward=10,
         match_reward=20,
-        late_reward=5,
     )
 
     assert result.organization_id == organization.id
@@ -229,7 +222,7 @@ def test_bootstrap_reactivates_and_promotes_existing_admin_membership(session: S
     assert _count(session, Team) == 1
     assert _count(session, User) == 1
     assert _count(session, TeamMembership) == 1
-    assert _count(session, CoinRule) == 3
+    assert _count(session, CoinRule) == 2
 
 
 def test_bootstrap_rejects_negative_default_rewards(session: Session) -> None:
@@ -244,7 +237,6 @@ def test_bootstrap_rejects_negative_default_rewards(session: Session) -> None:
             admin_name="Admin",
             training_reward=-1,
             match_reward=20,
-            late_reward=5,
         )
 
 
@@ -262,7 +254,6 @@ def test_device_smoke_seed_creates_persistent_idempotent_smoke_data(
     monkeypatch.setenv("BOOTSTRAP_ADMIN_NAME", "Smoke Admin")
     monkeypatch.setenv("BOOTSTRAP_TRAINING_REWARD", "11")
     monkeypatch.setenv("BOOTSTRAP_MATCH_REWARD", "22")
-    monkeypatch.setenv("BOOTSTRAP_LATE_REWARD", "4")
     monkeypatch.setenv("DEVICE_SMOKE_MEMBER_AUTH_ID", str(member_auth_id))
     monkeypatch.setenv("DEVICE_SMOKE_MEMBER_EMAIL", "member-smoke@example.com")
     monkeypatch.setenv("DEVICE_SMOKE_MEMBER_NAME", "Smoke Member")
@@ -293,9 +284,8 @@ def test_device_smoke_seed_creates_persistent_idempotent_smoke_data(
 
     rules = session.scalars(select(CoinRule).where(CoinRule.team_id == first.team_id)).all()
     assert {rule.trigger_type: rule.amount for rule in rules} == {
-        CoinRuleTrigger.training_attendance: 11,
-        CoinRuleTrigger.match_attendance: 22,
-        CoinRuleTrigger.late_attendance: 4,
+        CoinRuleTrigger.training_signup: 11,
+        CoinRuleTrigger.match_signup: 22,
     }
 
     training = session.get(Event, first.training_event_id)

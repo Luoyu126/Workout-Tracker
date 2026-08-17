@@ -1,8 +1,9 @@
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-import { LanguageToggle } from "@/components/LanguageToggle";
+import { CompactLanguageToggle } from "@/components/LanguageToggle";
+import { Button, Screen, TextField } from "@/components/ui";
 import { getMyProfile, signIn, signUp, syncProfile, type SyncProfileInput } from "@/features/auth/api";
 import { normalizeAuthCredentials, normalizeProfileInput } from "@/features/auth/validation";
 import { ApiError, apiConfig } from "@/lib/api/client";
@@ -10,9 +11,12 @@ import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { supabaseConfig } from "@/lib/supabase/config";
 import { colors } from "@/theme/colors";
+import { spacing, typography } from "@/theme/tokens";
 
 export default function LoginScreen() {
   const { t } = useI18n();
+  const router = useRouter();
+  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -52,17 +56,20 @@ export default function LoginScreen() {
         await getMyProfile();
         setDidAuthenticate(true);
         setMessage(t("auth.signInSuccess"));
+        router.replace("/");
       } catch (error) {
         if (error instanceof ApiError && error.code === "USER_NOT_SYNCED") {
           const profileInput = normalizeProfileInput(name, studentId);
           if (profileInput === null) {
             setDidAuthenticate(true);
+            setMode("signUp");
             setMessage(t("auth.signInNeedsProfile"));
             return;
           }
           await syncProfile(profileInput);
           setDidAuthenticate(true);
           setMessage(t("auth.signInSyncedProfile"));
+          router.replace("/");
           return;
         }
         throw error;
@@ -99,6 +106,7 @@ export default function LoginScreen() {
         await syncProfile(profileInput);
         setDidAuthenticate(true);
         setMessage(t("auth.signUpSuccess"));
+        router.replace("/");
       } catch {
         setMessage(t("auth.signUpNeedsSignIn"));
       }
@@ -110,131 +118,130 @@ export default function LoginScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{t("auth.signIn")}</Text>
-      <LanguageToggle />
-      {!supabaseConfig.isConfigured ? (
-        <Text style={styles.message}>{t("auth.supabaseConfigMissing")}</Text>
-      ) : null}
+    <Screen scroll contentStyle={styles.content}>
+      <View style={styles.brandRow}>
+        <Text style={styles.brand}>⚡ SquadHub</Text>
+        <CompactLanguageToggle />
+      </View>
+
+      <View style={styles.hero}>
+        <Text style={styles.title}>{mode === "signIn" ? t("auth.welcomeBack") : t("auth.createAccount")}</Text>
+        <Text style={styles.subtitle}>
+          {mode === "signIn" ? t("auth.signInHint") : t("auth.signUpHint")}
+        </Text>
+      </View>
+
+      {!supabaseConfig.isConfigured ? <Text style={styles.message}>{t("auth.supabaseConfigMissing")}</Text> : null}
       {hasApiConfigProblem ? <Text style={styles.message}>{t("auth.apiConfigMissing")}</Text> : null}
-      <TextInput
-        autoComplete="name"
-        textContentType="name"
-        onChangeText={setName}
-        placeholder={t("auth.name")}
-        placeholderTextColor={colors.muted}
-        style={styles.input}
-        value={name}
-      />
-      <TextInput
-        autoCorrect={false}
-        onChangeText={setStudentId}
-        placeholder={t("auth.studentId")}
-        placeholderTextColor={colors.muted}
-        style={styles.input}
-        value={studentId}
-      />
-      <TextInput
+
+      {mode === "signUp" || didAuthenticate ? (
+        <>
+          <TextField
+            autoComplete="name"
+            label={t("auth.name")}
+            onChangeText={setName}
+            textContentType="name"
+            value={name}
+          />
+          <TextField
+            autoCorrect={false}
+            label={t("auth.studentId")}
+            onChangeText={setStudentId}
+            value={studentId}
+          />
+        </>
+      ) : null}
+
+      <TextField
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
         keyboardType="email-address"
+        label={t("auth.emailOrStudentId")}
         onChangeText={setEmail}
         placeholder={t("auth.email")}
-        placeholderTextColor={colors.muted}
-        style={styles.input}
         textContentType="emailAddress"
         value={email}
       />
-      <TextInput
+      <TextField
         autoCapitalize="none"
         autoComplete="password"
         autoCorrect={false}
+        label={t("auth.password")}
         onChangeText={setPassword}
-        placeholder={t("auth.password")}
-        placeholderTextColor={colors.muted}
         secureTextEntry
-        style={styles.input}
         textContentType="password"
         value={password}
       />
-      <Pressable
-        accessibilityRole="button"
+
+      <Button
         disabled={isSubmitting || !supabaseConfig.isConfigured}
-        onPress={handleSignIn}
-        style={[styles.button, (isSubmitting || !supabaseConfig.isConfigured) && styles.disabled]}
-      >
-        <Text style={styles.buttonText}>{t("auth.signIn")}</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
+        label={mode === "signIn" ? t("auth.signIn") : t("auth.signUp")}
+        onPress={() => void (mode === "signIn" ? handleSignIn() : handleSignUp())}
+      />
+
+      <Button
         disabled={isSubmitting || !supabaseConfig.isConfigured}
-        onPress={handleSignUp}
-        style={[styles.secondaryButton, (isSubmitting || !supabaseConfig.isConfigured) && styles.disabled]}
-      >
-        <Text style={styles.secondaryText}>{t("auth.signUp")}</Text>
-      </Pressable>
+        label={mode === "signIn" ? t("auth.signUp") : t("auth.signIn")}
+        variant="secondary"
+        onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
+      />
+
       {didAuthenticate ? (
-        <Link href="/teams" asChild>
-          <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-            <Text style={styles.secondaryText}>{t("home.openTeams")}</Text>
-          </Pressable>
-        </Link>
+        <Button label={t("home.openTeams")} variant="ghost" onPress={() => router.replace("/teams")} />
       ) : null}
+
+      <Text style={styles.switchText}>
+        {mode === "signIn" ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+        <Text style={styles.switchLink} onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>
+          {mode === "signIn" ? t("auth.registerNow") : t("auth.signIn")}
+        </Text>
+      </Text>
+
       {message ? <Text style={styles.message}>{message}</Text> : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: 14,
-    padding: 20,
-    paddingTop: 72
+  content: {
+    gap: spacing.lg,
+    justifyContent: "center",
+    paddingTop: spacing.xxxl
+  },
+  brandRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  brand: {
+    color: colors.accentSoft,
+    fontSize: 20,
+    fontWeight: "800"
+  },
+  hero: {
+    gap: spacing.sm,
+    marginBottom: spacing.md
   },
   title: {
     color: colors.text,
-    fontSize: 30,
-    fontWeight: "800",
-    marginBottom: 10
+    ...typography.title
   },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    color: colors.text,
-    fontSize: 16,
-    minHeight: 52,
-    paddingHorizontal: 14
+  subtitle: {
+    color: colors.muted,
+    ...typography.body
   },
-  button: {
-    alignItems: "center",
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    minHeight: 52,
-    justifyContent: "center"
+  switchText: {
+    color: colors.muted,
+    textAlign: "center",
+    ...typography.body
   },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
+  switchLink: {
+    color: colors.accentSoft,
     fontWeight: "800"
-  },
-  secondaryButton: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    minHeight: 52,
-    justifyContent: "center"
-  },
-  secondaryText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "800"
-  },
-  disabled: {
-    opacity: 0.7
   },
   message: {
     color: colors.muted,
-    fontSize: 14
+    ...typography.caption
   }
 });

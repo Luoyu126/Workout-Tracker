@@ -251,18 +251,14 @@ describe("feature API contracts", () => {
     });
   });
 
-  test("attendance APIs call expected endpoints", async () => {
-    const { completeEvent, getEventAttendance, getTeamAttendanceBoard, upsertAttendance } = await import(
-      "../src/features/attendance/api"
-    );
+  test("event completion and signup board APIs call expected endpoints", async () => {
+    const { completeEvent } = await import("../src/features/events/api");
+    const { getTeamSignupBoard } = await import("../src/features/teams/api");
 
-    getEventAttendance("event-1");
-    getTeamAttendanceBoard("team-1", {
+    getTeamSignupBoard("team-1", {
       startsAfter: "2026-08-01T00:00:00.000Z",
       startsBefore: "2026-08-31T23:59:59.000Z"
     });
-    upsertAttendance("event-1", "user-1", "present", "  准时  ");
-    upsertAttendance("event-1", "user-1", "absent", "   ");
     completeEvent("event-1");
     completeEvent("event-1", {
       match_details: {
@@ -273,23 +269,14 @@ describe("feature API contracts", () => {
       }
     });
 
-    expect(apiRequestMock).toHaveBeenNthCalledWith(1, "/api/v1/events/event-1/attendance");
     expect(apiRequestMock).toHaveBeenNthCalledWith(
-      2,
-      "/api/v1/teams/team-1/attendance-board?starts_after=2026-08-01T00%3A00%3A00.000Z&starts_before=2026-08-31T23%3A59%3A59.000Z"
+      1,
+      "/api/v1/teams/team-1/signup-board?starts_after=2026-08-01T00%3A00%3A00.000Z&starts_before=2026-08-31T23%3A59%3A59.000Z"
     );
-    expect(apiRequestMock).toHaveBeenNthCalledWith(3, "/api/v1/events/event-1/attendance/user-1", {
-      method: "PUT",
-      body: { status: "present", note: "准时" }
-    });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(4, "/api/v1/events/event-1/attendance/user-1", {
-      method: "PUT",
-      body: { status: "absent", note: null }
-    });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(5, "/api/v1/events/event-1/complete", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(2, "/api/v1/events/event-1/complete", {
       method: "POST"
     });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(6, "/api/v1/events/event-1/complete", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(3, "/api/v1/events/event-1/complete", {
       method: "POST",
       body: {
         match_details: {
@@ -319,8 +306,8 @@ describe("feature API contracts", () => {
       updateCoinRule
     } = await import("../src/features/coins/api");
     const ruleInput = {
-      name: "训练出勤奖励",
-      trigger_type: "training_attendance" as const,
+      name: "训练报名奖励",
+      trigger_type: "training_signup" as const,
       amount: 10,
       config: null,
       is_active: true
@@ -335,7 +322,7 @@ describe("feature API contracts", () => {
     getMemberCoinTransactions("team-1", "user-1", { type: "admin_adjustment" });
     getCoinRules("team-1");
     createCoinRule("team-1", ruleInput);
-    updateCoinRule("rule-1", { name: "训练出勤奖励", amount: 12, is_active: true });
+    updateCoinRule("rule-1", { name: "训练报名奖励", amount: 12, is_active: true });
     createManualCoinTransaction("team-1", {
       user_id: "user-1",
       amount: -5,
@@ -363,7 +350,7 @@ describe("feature API contracts", () => {
     });
     expect(apiRequestMock).toHaveBeenNthCalledWith(6, "/api/v1/coin-rules/rule-1", {
       method: "PATCH",
-      body: { name: "训练出勤奖励", amount: 12, is_active: true }
+      body: { name: "训练报名奖励", amount: 12, is_active: true }
     });
     expect(apiRequestMock).toHaveBeenNthCalledWith(7, "/api/v1/teams/team-1/coin-transactions", {
       method: "POST",

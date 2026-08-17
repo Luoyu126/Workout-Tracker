@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.attendance.router import router as attendance_router
 from app.coins.router import router as coins_router
 from app.config import get_settings
 from app.events.match_router import router as match_router
@@ -40,7 +39,6 @@ def create_app() -> FastAPI:
     app.include_router(teams_router)
     app.include_router(events_router)
     app.include_router(match_router)
-    app.include_router(attendance_router)
     app.include_router(coins_router)
     app.include_router(store_router)
     app.include_router(notifications_router)

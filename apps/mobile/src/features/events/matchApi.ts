@@ -1,8 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 import { generateClientUuid } from "@/lib/uuid";
 
-import type { AttendanceStatus } from "../attendance/api";
-import type { MatchDetails, TeamEvent } from "./api";
+import type { MatchDetails, SignupStatus, TeamEvent } from "./api";
 
 export type MatchEntryType = "goal" | "yellow_card" | "red_card" | "substitution";
 
@@ -29,9 +28,10 @@ export type LiveBoard = {
   counts: Record<MatchEntryType, number>;
 };
 
-export type MatchSummaryAttendance = {
+export type MatchSummarySignup = {
   user_id: string;
-  status: AttendanceStatus;
+  status: SignupStatus;
+  updated_at?: string;
 };
 
 export type MatchSummaryReward = {
@@ -40,7 +40,7 @@ export type MatchSummaryReward = {
 };
 
 export type MatchSummary = LiveBoard & {
-  attendance: MatchSummaryAttendance[];
+  signups: MatchSummarySignup[];
   rewards: MatchSummaryReward[];
 };
 

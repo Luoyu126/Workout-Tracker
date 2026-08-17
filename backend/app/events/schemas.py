@@ -197,3 +197,14 @@ class EventSignupUpsertRequest(BaseModel):
         if self.status == SignupStatus.not_going and not self.note:
             raise ValueError("not_going signup requires a note")
         return self
+
+
+class EventCompletionRequest(BaseModel):
+    match_details: MatchDetailsUpdateRequest | None = None
+
+
+class EventCompletionRead(BaseModel):
+    event_id: UUID
+    status: str
+    going_count: int
+    reward_count: int

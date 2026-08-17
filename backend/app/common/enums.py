@@ -49,13 +49,6 @@ class SignupStatus(StrEnum):
     maybe = "maybe"
 
 
-class AttendanceStatus(StrEnum):
-    present = "present"
-    late = "late"
-    absent = "absent"
-    excused = "excused"
-
-
 class MatchEntryType(StrEnum):
     goal = "goal"
     yellow_card = "yellow_card"
@@ -70,14 +63,13 @@ class MatchResult(StrEnum):
 
 
 class CoinRuleTrigger(StrEnum):
-    training_attendance = "training_attendance"
-    match_attendance = "match_attendance"
-    late_attendance = "late_attendance"
+    training_signup = "training_signup"
+    match_signup = "match_signup"
     manual = "manual"
 
 
 class CoinTransactionType(StrEnum):
-    attendance_reward = "attendance_reward"
+    signup_reward = "signup_reward"
     redemption = "redemption"
     admin_adjustment = "admin_adjustment"
     other_reward = "other_reward"

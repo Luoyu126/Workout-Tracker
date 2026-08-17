@@ -1,6 +1,6 @@
 # Workout Tracker
 
-Mobile-first team management MVP for events, attendance, coin rewards, store redemptions, and notifications.
+Mobile-first team management MVP for events, signup-based completion rewards, coin rewards, store redemptions, and notifications.
 
 The current implementation follows the product and architecture baseline in:
 
@@ -256,7 +256,7 @@ Release-candidate gate:
 3. Run `npm run security:audit` only in an environment where npm registry dependency metadata disclosure is approved.
 4. Install an EAS development, preview, or production build on at least one iOS device and one Android device.
 5. Run `npm run e2e:maestro:check`, then `npm run e2e:maestro` where supported, or manually execute the same smoke path documented in [e2e/maestro/README.md](e2e/maestro/README.md).
-6. For the final MVP release, complete [e2e/maestro/device-smoke-checklist.md](e2e/maestro/device-smoke-checklist.md) on both platforms and run `npm run e2e:device-report:create -- <candidate>` to create a gitignored report from [e2e/maestro/device-smoke-report-template.md](e2e/maestro/device-smoke-report-template.md) for the release record, confirming that login/sign-up, default Chinese UI, language switching, team navigation, Inbox, push permission/token registration, event signup, captain/admin match logging, member read-only live board access, attendance completion, coin balance, and store redemption surfaces open and behave correctly against the target backend.
+6. For the final MVP release, complete [e2e/maestro/device-smoke-checklist.md](e2e/maestro/device-smoke-checklist.md) on both platforms and run `npm run e2e:device-report:create -- <candidate>` to create a gitignored report from [e2e/maestro/device-smoke-report-template.md](e2e/maestro/device-smoke-report-template.md) for the release record, confirming that login/sign-up, default Chinese UI, language switching, team navigation, Inbox, push permission/token registration, event signup, captain/admin match logging, member read-only live board access, event completion with signup rewards, coin balance, and store redemption surfaces open and behave correctly against the target backend.
 7. After filling the report, run `npm run e2e:device-report:check -- e2e/maestro/device-smoke-report-YYYYMMDD-<candidate>.md` to catch missing platform pass rows for iOS/Android, final decision checkboxes, automated gate evidence, and core smoke-path notes before tagging.
 
 `npm run verify` proves the automated contract and business-rule baseline; the
@@ -268,14 +268,14 @@ Implemented slices:
 
 - Supabase email sign-up/sign-in/sign-out, backend user sync, and profile read/update APIs/UI.
 - Team membership, team-scoped roles, organization/team/member reads, active/archived team filters for reactivation, admin member-candidate search, real team-home aggregates, and captain/admin member management.
-- Mobile team-home screen for member count, upcoming events, captains, attendance summary, coin summary, team logo editing, and team-scoped Inbox entry.
+- Mobile team-home screen for member count, upcoming events, captains, signup summary, coin summary, team logo editing, and team-scoped Inbox entry.
 - Events, matches, signup, list filters, captain-side create/publish/update/hard-delete flows, and create/publish/update/delete event notifications.
-- Attendance recording/correction from typed user IDs or signup lists, completion, absent backfill, configurable coin rewards, and correction clawback.
-- Match logs with captain/admin-only goals/cards/substitutions, polling live board, member read-only live board access, log deletion, and match summary.
-- Captain-side coin reward rule setup for training, match, and late attendance, plus admin manual coin adjustments with member quick-select and retry-safe client transaction IDs.
+- Event completion that settles `signup_reward` coins for `going` signups, team signup board, and configurable training/match signup coin rules.
+- Match logs with captain/admin-only goals/cards/substitutions, polling live board, member read-only live board access, log deletion, and match summary with signups.
+- Captain-side coin reward rule setup for training and match signup, plus admin manual coin adjustments with member quick-select and retry-safe client transaction IDs.
 - Store items with image URL preview/editing, captain-side item management, retry-safe client redemption IDs, redemptions, fulfillment, cancellation, refunds, and inventory restoration.
 - Inbox notifications, notification-tap deep links, event quick-signup actions, team-scoped unread filtering/counts, captain/admin team announcements, native Expo push token permission/registration, app-start/foreground token refresh, best-effort Expo remote push delivery, and device token deactivation.
-- Mobile-first Expo UI with default Simplified Chinese, keyboard-aware form layout, persisted language switching, persisted Supabase sessions, route coverage, EAS build profiles, media URL preview/editing, and form/input validation across auth/profile, teams/members, events, attendance, coins, store, announcements, and device-token setup.
+- Mobile-first Expo UI with default Simplified Chinese, keyboard-aware form layout, persisted language switching, persisted Supabase sessions, route coverage, EAS build profiles, media URL preview/editing, and form/input validation across auth/profile, teams/members, events, signup, coins, store, announcements, and device-token setup.
 - Mobile API client handling for empty 204 responses, FastAPI structured/string/validation error details, and network-failure/offline recovery prompts with retry actions.
 
 Push notification note:
@@ -305,9 +305,8 @@ in-memory database. It seeds team/users/media URLs, creates and publishes a
 training event, notifies the team, updates and hard-deletes a published event
 with event-updated and event-deleted notifications, creates and publishes a
 match, submits signup, logs and deletes match live-board entries, reads the live
-board, records match attendance, completes the match with a final score, records
-and completes training attendance, backfills absent attendance, rewards coins,
-claws back reward after correction, redeems a store item with an image URL,
+board, completes the match with a final score and signup rewards, completes
+training with signup rewards, redeems a store item with an image URL,
 fulfills, refunds and restores inventory, then publishes a team announcement.
 
 Demo milestones: seed team/users/media URLs; submit signup; log a match goal; read the live board; complete a match with final score; publish a team announcement.

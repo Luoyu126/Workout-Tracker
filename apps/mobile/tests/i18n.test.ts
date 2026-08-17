@@ -73,7 +73,6 @@ test("dynamic enum translation keys cover MVP API values", () => {
     ...enumValues("EventStatus").map((status) => `events.status.${status}`),
     ...enumValues("MatchResult").map((result) => `events.result.${result}`),
     ...enumValues("SignupStatus").map((status) => `events.signup.${status}`),
-    ...enumValues("AttendanceStatus").map((status) => `attendance.${status}`),
     ...enumValues("MatchEntryType").map((type) => `match.${type}`),
     ...enumValues("RedemptionStatus").map((status) => `store.status.${status}`),
     ...enumValues("CoinTransactionType").map(
@@ -83,12 +82,16 @@ test("dynamic enum translation keys cover MVP API values", () => {
   ];
 
   expect(dynamicKeys.filter((key) => !knownKeys.has(key))).toEqual([]);
+  expect(knownKeys.has("signupBoard.title")).toBe(true);
+  expect(knownKeys.has("events.signup.going")).toBe(true);
+  expect(knownKeys.has("events.signup.maybe")).toBe(true);
+  expect(knownKeys.has("events.signup.not_going")).toBe(true);
 });
 
 test("language switching is reachable before and after authentication", () => {
   const loginSource = readFileSync(resolve(appRoot, "app/login.tsx"), "utf-8");
-  const homeSource = readFileSync(resolve(appRoot, "app/index.tsx"), "utf-8");
-  const profileSource = readFileSync(resolve(appRoot, "app/profile.tsx"), "utf-8");
+  const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+  const profileSource = readFileSync(resolve(appRoot, "app/(tabs)/profile.tsx"), "utf-8");
   const languageToggleSource = readFileSync(resolve(appRoot, "src/components/LanguageToggle.tsx"), "utf-8");
 
   expect(loginSource).toContain("LanguageToggle");

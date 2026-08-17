@@ -80,5 +80,5 @@ class MatchSummaryRead(BaseModel):
     event: EventRead
     match_details: MatchDetailsRead | None
     counts: dict[str, int]
-    attendance: list[dict[str, object]]
+    signups: list[dict[str, object]]
     rewards: list[dict[str, object]]
