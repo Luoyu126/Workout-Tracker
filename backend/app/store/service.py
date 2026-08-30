@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.coins.service import coin_balance
@@ -12,6 +13,7 @@ from app.common.enums import (
     RedemptionStatus,
     enum_value,
 )
+from app.common.permissions import PermissionDeniedError
 from app.models import CoinTransaction, Redemption, StoreItem, User
 from app.notifications.service import create_user_notification
 from app.store.schemas import (
@@ -62,6 +64,10 @@ def _redemption_read(redemption: Redemption, redemption_user: User | None) -> di
         "status": redemption.status,
         "fulfilled_by": redemption.fulfilled_by,
         "fulfilled_at": redemption.fulfilled_at,
+        "cancelled_by": redemption.cancelled_by,
+        "cancelled_at": redemption.cancelled_at,
+        "refunded_by": redemption.refunded_by,
+        "refunded_at": redemption.refunded_at,
         "created_at": redemption.created_at,
         "updated_at": redemption.updated_at,
     }
@@ -107,7 +113,7 @@ def create_store_item(
     user: User,
     payload: StoreItemCreateRequest,
 ) -> StoreItem:
-    require_team_role(session, team_id, user.id, MembershipRole.captain)
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
     if payload.id is not None:
         existing = session.get(StoreItem, payload.id)
         if existing is not None:
@@ -137,7 +143,7 @@ def update_store_item(
     payload: StoreItemUpdateRequest,
 ) -> StoreItem:
     item = _get_store_item(session, item_id)
-    require_team_role(session, item.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, item.team_id, user.id, MembershipRole.admin)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     session.commit()
@@ -151,7 +157,9 @@ def create_redemption(
     user: User,
     payload: RedemptionCreateRequest,
 ) -> Redemption:
-    get_active_membership(session, team_id, user.id)
+    membership = get_active_membership(session, team_id, user.id)
+    if membership.role != MembershipRole.member:
+        raise PermissionDeniedError("Only members can create redemptions")
     existing = session.get(Redemption, payload.id)
     if existing is not None:
         if (
@@ -204,7 +212,20 @@ def create_redemption(
     )
     if item.stock is not None:
         item.stock -= payload.quantity
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        existing = session.get(Redemption, payload.id)
+        if (
+            existing is not None
+            and existing.user_id == user.id
+            and existing.team_id == team_id
+            and existing.store_item_id == payload.store_item_id
+            and existing.quantity == payload.quantity
+        ):
+            return existing
+        raise StoreRuleError("Redemption transaction already exists") from exc
     session.refresh(redemption)
     return redemption
 
@@ -233,7 +254,7 @@ def list_team_redemptions(
     user: User,
     status: RedemptionStatus | None = None,
 ) -> list[dict[str, object]]:
-    require_team_role(session, team_id, user.id, MembershipRole.captain)
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
     stmt = (
         select(Redemption, User)
         .join(User, User.id == Redemption.user_id)
@@ -251,7 +272,7 @@ def fulfill_redemption(session: Session, redemption_id: UUID, user: User) -> Red
     )
     if redemption is None:
         raise RedemptionNotFoundError("Redemption not found")
-    require_team_role(session, redemption.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, redemption.team_id, user.id, MembershipRole.admin)
     if redemption.status == RedemptionStatus.fulfilled:
         return redemption
     if redemption.status != RedemptionStatus.pending:
@@ -274,7 +295,14 @@ def fulfill_redemption(session: Session, redemption_id: UUID, user: User) -> Red
     return redemption
 
 
-def _refund_redemption(session: Session, redemption: Redemption, user: User, next_status: RedemptionStatus) -> None:
+def _refund_redemption(
+    session: Session,
+    redemption: Redemption,
+    user: User,
+    next_status: RedemptionStatus,
+    *,
+    restore_stock: bool,
+) -> None:
     existing_refund = session.scalar(
         select(CoinTransaction).where(
             CoinTransaction.team_id == redemption.team_id,
@@ -302,12 +330,20 @@ def _refund_redemption(session: Session, redemption: Redemption, user: User, nex
             metadata_={"next_status": enum_value(next_status)},
         )
     )
-    item = session.scalar(
-        select(StoreItem).where(StoreItem.id == redemption.store_item_id).with_for_update()
-    )
-    if item is not None and item.stock is not None:
-        item.stock += redemption.quantity
+    if restore_stock:
+        item = session.scalar(
+            select(StoreItem).where(StoreItem.id == redemption.store_item_id).with_for_update()
+        )
+        if item is not None and item.stock is not None:
+            item.stock += redemption.quantity
     redemption.status = next_status
+    now = datetime.now(UTC)
+    if next_status == RedemptionStatus.cancelled:
+        redemption.cancelled_by = user.id
+        redemption.cancelled_at = now
+    else:
+        redemption.refunded_by = user.id
+        redemption.refunded_at = now
 
 
 def cancel_redemption(session: Session, redemption_id: UUID, user: User) -> Redemption:
@@ -316,12 +352,18 @@ def cancel_redemption(session: Session, redemption_id: UUID, user: User) -> Rede
     )
     if redemption is None:
         raise RedemptionNotFoundError("Redemption not found")
-    require_team_role(session, redemption.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, redemption.team_id, user.id, MembershipRole.admin)
     if redemption.status == RedemptionStatus.cancelled:
         return redemption
     if redemption.status != RedemptionStatus.pending:
         raise StoreRuleError("Only pending redemptions can be cancelled")
-    _refund_redemption(session, redemption, user, RedemptionStatus.cancelled)
+    _refund_redemption(
+        session,
+        redemption,
+        user,
+        RedemptionStatus.cancelled,
+        restore_stock=True,
+    )
     session.commit()
     session.refresh(redemption)
     return redemption
@@ -333,12 +375,18 @@ def refund_redemption(session: Session, redemption_id: UUID, user: User) -> Rede
     )
     if redemption is None:
         raise RedemptionNotFoundError("Redemption not found")
-    require_team_role(session, redemption.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, redemption.team_id, user.id, MembershipRole.admin)
     if redemption.status == RedemptionStatus.refunded:
         return redemption
     if redemption.status != RedemptionStatus.fulfilled:
         raise StoreRuleError("Only fulfilled redemptions can be refunded")
-    _refund_redemption(session, redemption, user, RedemptionStatus.refunded)
+    _refund_redemption(
+        session,
+        redemption,
+        user,
+        RedemptionStatus.refunded,
+        restore_stock=False,
+    )
     session.commit()
     session.refresh(redemption)
     return redemption

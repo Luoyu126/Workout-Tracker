@@ -62,9 +62,9 @@ class MembershipRead(BaseModel):
     user_id: UUID
     role: MembershipRole
     jersey_number: str | None
-    position: str | None
+    player_name: str | None
     status: MembershipStatus
-    joined_at: datetime
+    joined_at: datetime | None
     left_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -77,10 +77,10 @@ class MembershipCreateRequest(BaseModel):
     user_id: UUID
     role: MembershipRole = MembershipRole.member
     jersey_number: str | None = Field(default=None, max_length=16)
-    position: str | None = Field(default=None, max_length=64)
+    player_name: str | None = Field(default=None, max_length=64)
     status: MembershipStatus = MembershipStatus.active
 
-    @field_validator("jersey_number", "position")
+    @field_validator("jersey_number", "player_name")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         return stripped_optional_text(value)
@@ -89,11 +89,11 @@ class MembershipCreateRequest(BaseModel):
 class MembershipUpdateRequest(BaseModel):
     role: MembershipRole | None = None
     jersey_number: str | None = Field(default=None, max_length=16)
-    position: str | None = Field(default=None, max_length=64)
+    player_name: str | None = Field(default=None, max_length=64)
     status: MembershipStatus | None = None
     left_at: datetime | None = None
 
-    @field_validator("jersey_number", "position")
+    @field_validator("jersey_number", "player_name")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         return stripped_optional_text(value)
@@ -102,7 +102,7 @@ class MembershipUpdateRequest(BaseModel):
 class TeamHomeRead(BaseModel):
     team: TeamRead
     current_membership: MembershipRead
-    captains: list[MembershipRead]
+    admins: list[MembershipRead]
     member_count: int
     upcoming_events: list[dict[str, object]]
     signup_summary: dict[str, int]

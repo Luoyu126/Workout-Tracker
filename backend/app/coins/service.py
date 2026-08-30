@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.coins.schemas import (
@@ -14,11 +15,12 @@ from app.common.enums import (
     CoinTransactionType,
     EventType,
     MembershipRole,
+    MembershipStatus,
     NotificationType,
     SignupStatus,
     enum_value,
 )
-from app.models import CoinRule, CoinTransaction, Event, User
+from app.models import CoinRule, CoinTransaction, Event, TeamMembership, User
 from app.notifications.service import create_user_notification
 from app.teams.service import get_active_membership, require_team_role
 
@@ -33,6 +35,32 @@ class CoinRuleConflictError(Exception):
 
 class CoinTransactionConflictError(Exception):
     pass
+
+
+SIGNUP_RULE_TRIGGERS = {
+    CoinRuleTrigger.training_signup,
+    CoinRuleTrigger.match_signup,
+}
+
+
+def _ensure_active_signup_rule_available(
+    session: Session,
+    team_id: UUID,
+    trigger_type: CoinRuleTrigger,
+    *,
+    exclude_rule_id: UUID | None = None,
+) -> None:
+    if trigger_type not in SIGNUP_RULE_TRIGGERS:
+        return
+    stmt = select(CoinRule.id).where(
+        CoinRule.team_id == team_id,
+        CoinRule.trigger_type == trigger_type,
+        CoinRule.is_active.is_(True),
+    )
+    if exclude_rule_id is not None:
+        stmt = stmt.where(CoinRule.id != exclude_rule_id)
+    if session.scalar(stmt) is not None:
+        raise CoinRuleConflictError(f"An active {trigger_type.value} rule already exists")
 
 
 def reward_amount_for_signup(session: Session, event: Event, signup_status: SignupStatus) -> int:
@@ -73,7 +101,7 @@ def create_coin_rule(
     user: User,
     payload: CoinRuleCreateRequest,
 ) -> CoinRule:
-    require_team_role(session, team_id, user.id, MembershipRole.captain)
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
     if payload.id is not None:
         existing = session.get(CoinRule, payload.id)
         if existing is not None:
@@ -88,9 +116,15 @@ def create_coin_rule(
             ):
                 raise CoinRuleConflictError("Coin rule id already belongs to another request")
             return existing
+    if payload.is_active:
+        _ensure_active_signup_rule_available(session, team_id, payload.trigger_type)
     rule = CoinRule(team_id=team_id, created_by=user.id, **payload.model_dump())
     session.add(rule)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise CoinRuleConflictError("An active signup rule already exists") from exc
     session.refresh(rule)
     return rule
 
@@ -104,10 +138,22 @@ def update_coin_rule(
     rule = session.get(CoinRule, rule_id)
     if rule is None:
         raise CoinRuleNotFoundError("Coin rule not found")
-    require_team_role(session, rule.team_id, user.id, MembershipRole.captain)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    require_team_role(session, rule.team_id, user.id, MembershipRole.admin)
+    update_data = payload.model_dump(exclude_unset=True)
+    if update_data.get("is_active") is True and not rule.is_active:
+        _ensure_active_signup_rule_available(
+            session,
+            rule.team_id,
+            rule.trigger_type,
+            exclude_rule_id=rule.id,
+        )
+    for field, value in update_data.items():
         setattr(rule, field, value)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise CoinRuleConflictError("An active signup rule already exists") from exc
     session.refresh(rule)
     return rule
 
@@ -116,7 +162,7 @@ def coin_balance(session: Session, team_id: UUID, user: User, target_user_id: UU
     get_active_membership(session, team_id, user.id)
     user_id = target_user_id or user.id
     if target_user_id is not None and target_user_id != user.id:
-        require_team_role(session, team_id, user.id, MembershipRole.captain)
+        require_team_role(session, team_id, user.id, MembershipRole.admin)
     return session.scalar(
         select(func.coalesce(func.sum(CoinTransaction.amount), 0)).where(
             CoinTransaction.team_id == team_id,
@@ -137,7 +183,7 @@ def list_coin_transactions(
     get_active_membership(session, team_id, user.id)
     user_id = target_user_id or user.id
     if target_user_id is not None and target_user_id != user.id:
-        require_team_role(session, team_id, user.id, MembershipRole.captain)
+        require_team_role(session, team_id, user.id, MembershipRole.admin)
     stmt = select(CoinTransaction).where(
         CoinTransaction.team_id == team_id,
         CoinTransaction.user_id == user_id,
@@ -217,6 +263,20 @@ def issue_signup_reward(
     signup_status: SignupStatus,
     created_by: UUID,
 ) -> CoinTransaction | None:
+    if signup_status != SignupStatus.going:
+        return None
+    eligible_membership = session.scalar(
+        select(TeamMembership.id).where(
+            TeamMembership.team_id == event.team_id,
+            TeamMembership.user_id == user_id,
+            TeamMembership.role == MembershipRole.member,
+            TeamMembership.status == MembershipStatus.active,
+            TeamMembership.joined_at.is_not(None),
+            TeamMembership.joined_at <= event.start_time,
+        )
+    )
+    if eligible_membership is None:
+        return None
     amount = reward_amount_for_signup(session, event, signup_status)
     if amount == 0:
         return None

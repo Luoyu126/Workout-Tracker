@@ -75,12 +75,12 @@ def _seed_team(session: Session) -> tuple[Team, User, User]:
     return team, player, other_player
 
 
-def _seed_team_with_captain(session: Session) -> tuple[Team, User, User, User]:
+def _seed_team_with_admin(session: Session) -> tuple[Team, User, User, User]:
     organization = Organization(name="Announcement API Org", slug=f"announcement-api-{uuid4().hex[:8]}")
-    captain = _user("Announcement Captain")
+    admin = _user("Announcement Admin")
     player = _user("Announcement Player")
     inactive_player = _user("Inactive Announcement Player")
-    session.add_all([organization, captain, player, inactive_player])
+    session.add_all([organization, admin, player, inactive_player])
     session.flush()
 
     team = Team(organization_id=organization.id, name="Announcement MVP Team")
@@ -90,8 +90,8 @@ def _seed_team_with_captain(session: Session) -> tuple[Team, User, User, User]:
         [
             TeamMembership(
                 team_id=team.id,
-                user_id=captain.id,
-                role=MembershipRole.captain,
+                user_id=admin.id,
+                role=MembershipRole.admin,
                 status=MembershipStatus.active,
             ),
             TeamMembership(
@@ -109,7 +109,7 @@ def _seed_team_with_captain(session: Session) -> tuple[Team, User, User, User]:
         ]
     )
     session.commit()
-    return team, captain, player, inactive_player
+    return team, admin, player, inactive_player
 
 
 def test_notification_router_lists_counts_and_marks_only_own_notifications(
@@ -128,7 +128,7 @@ def test_notification_router_lists_counts_and_marks_only_own_notifications(
     other_notification = Notification(
         user_id=other_player.id,
         team_id=team.id,
-        type=NotificationType.event_updated,
+        type=NotificationType.team_announcement,
         title="活动更新",
         body="训练时间更新",
         reference_type="event",
@@ -651,18 +651,18 @@ def test_push_delivery_reports_skipped_notifications_without_active_tokens(sessi
     assert report.skipped == 1
 
 
-def test_captain_can_post_team_announcement_for_active_members(session: Session) -> None:
-    team, captain, player, inactive_player = _seed_team_with_captain(session)
+def test_admin_can_post_team_announcement_for_active_members(session: Session) -> None:
+    team, admin, player, inactive_player = _seed_team_with_admin(session)
     announcement_id = uuid4()
 
     notifications = post_team_announcement(
         team.id,
         TeamAnnouncementRequest(id=announcement_id, title="今晚训练", body="19:00 准时到球场集合。"),
-        captain,
+        admin,
         session,
     )
 
-    assert {notification.user_id for notification in notifications} == {captain.id, player.id}
+    assert {notification.user_id for notification in notifications} == {admin.id, player.id}
     assert inactive_player.id not in {notification.user_id for notification in notifications}
     assert all(notification.type == NotificationType.team_announcement for notification in notifications)
     assert all(notification.reference_type == "team_announcement" for notification in notifications)
@@ -674,15 +674,15 @@ def test_captain_can_post_team_announcement_for_active_members(session: Session)
 
 
 def test_team_announcement_create_is_idempotent_by_client_announcement_id(session: Session) -> None:
-    team, captain, player, _ = _seed_team_with_captain(session)
+    team, admin, player, _ = _seed_team_with_admin(session)
     announcement_id = uuid4()
     payload = TeamAnnouncementRequest(id=announcement_id, title="今晚训练", body="19:00 准时到球场集合。")
 
-    notifications = post_team_announcement(team.id, payload, captain, session)
-    repeated_notifications = post_team_announcement(team.id, payload, captain, session)
+    notifications = post_team_announcement(team.id, payload, admin, session)
+    repeated_notifications = post_team_announcement(team.id, payload, admin, session)
 
     assert {notification.id for notification in repeated_notifications} == {notification.id for notification in notifications}
-    assert {notification.user_id for notification in notifications} == {captain.id, player.id}
+    assert {notification.user_id for notification in notifications} == {admin.id, player.id}
     assert read_unread_count(team.id, player, session) == {"count": 1}
     assert session.scalars(
         select(Notification)
@@ -698,7 +698,7 @@ def test_team_announcement_create_is_idempotent_by_client_announcement_id(sessio
         post_team_announcement(
             team.id,
             TeamAnnouncementRequest(id=announcement_id, title="今晚训练", body="20:00 改时间。"),
-            captain,
+            admin,
             session,
         )
     assert mismatch_exc.value.status_code == 409
@@ -710,7 +710,7 @@ def test_team_announcement_push_failure_still_persists_in_app_notifications(
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    team, captain, player, _ = _seed_team_with_captain(session)
+    team, admin, player, _ = _seed_team_with_admin(session)
     session.add(
         DeviceToken(
             user_id=player.id,
@@ -744,19 +744,19 @@ def test_team_announcement_push_failure_still_persists_in_app_notifications(
     notifications = post_team_announcement(
         team.id,
         TeamAnnouncementRequest(id=uuid4(), title="今晚训练", body="即使远程推送失败，站内通知也必须保留。"),
-        captain,
+        admin,
         session,
     )
 
     assert len(send_attempts) == 1
     assert [message["to"] for message in send_attempts[0]] == ["ExponentPushToken[player]"]
-    assert {notification.user_id for notification in notifications} == {captain.id, player.id}
+    assert {notification.user_id for notification in notifications} == {admin.id, player.id}
     assert session.scalars(select(Notification).order_by(Notification.created_at)).all() == notifications
     assert read_unread_count(team.id, player, session) == {"count": 1}
 
 
 def test_member_cannot_post_team_announcement(session: Session) -> None:
-    team, _, player, _ = _seed_team_with_captain(session)
+    team, _, player, _ = _seed_team_with_admin(session)
 
     with pytest.raises(HTTPException) as exc:
         post_team_announcement(

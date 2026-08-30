@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.common.enums import DevicePlatform, MembershipRole, MembershipStatus, NotificationType
 from app.config import get_settings
-from app.models import DeviceToken, Notification, TeamMembership, User
+from app.models import DeviceToken, Event, Notification, TeamMembership, User
 from app.notifications.push import enqueue_push_notifications
 from app.teams.service import get_active_membership, require_team_role
 
@@ -69,6 +69,80 @@ def create_team_notifications(
     return notifications
 
 
+def _event_notification_content(event: Event) -> tuple[str, str]:
+    title = "新比赛" if event.type == "match" else "新活动"
+    body = f"{event.title} 已发布，请在 {event.start_time.isoformat()} 前确认是否参加。"
+    return title, body
+
+
+def sync_event_notifications(session: Session, event: Event) -> list[Notification]:
+    """Create or update the single referenced new-event notification per eligible member."""
+    eligible_user_ids = set(
+        session.scalars(
+            select(TeamMembership.user_id).where(
+                TeamMembership.team_id == event.team_id,
+                TeamMembership.role == MembershipRole.member,
+                TeamMembership.status == MembershipStatus.active,
+                TeamMembership.joined_at.is_not(None),
+                TeamMembership.joined_at <= event.created_at,
+            )
+        ).all()
+    )
+    existing = list(
+        session.scalars(
+            select(Notification).where(
+                Notification.team_id == event.team_id,
+                Notification.type == NotificationType.new_event,
+                Notification.reference_id == event.id,
+            )
+        )
+    )
+    existing_by_user_id = {notification.user_id: notification for notification in existing}
+    title, body = _event_notification_content(event)
+    now = datetime.now(UTC)
+
+    for notification in existing:
+        if notification.user_id not in eligible_user_ids:
+            session.delete(notification)
+            continue
+        notification.title = title
+        notification.body = body
+        notification.reference_type = "event"
+        notification.updated_at = now
+
+    created: list[Notification] = []
+    for user_id in eligible_user_ids - existing_by_user_id.keys():
+        notification = Notification(
+            user_id=user_id,
+            team_id=event.team_id,
+            type=NotificationType.new_event,
+            title=title,
+            body=body,
+            reference_type="event",
+            reference_id=event.id,
+        )
+        session.add(notification)
+        created.append(notification)
+
+    session.flush()
+    if created:
+        enqueue_push_notifications(session, created, get_settings())
+    return [
+        notification
+        for notification in existing + created
+        if notification.user_id in eligible_user_ids
+    ]
+
+
+def delete_event_notifications(session: Session, event_id: UUID) -> None:
+    session.execute(
+        delete(Notification).where(
+            Notification.type == NotificationType.new_event,
+            Notification.reference_id == event_id,
+        )
+    )
+
+
 def create_team_announcement(
     session: Session,
     team_id: UUID,
@@ -77,7 +151,7 @@ def create_team_announcement(
     title: str,
     body: str,
 ) -> list[Notification]:
-    require_team_role(session, team_id, user.id, MembershipRole.captain)
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
     existing_notifications = list(
         session.scalars(
             select(Notification)

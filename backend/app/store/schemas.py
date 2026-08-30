@@ -75,6 +75,10 @@ class RedemptionRead(BaseModel):
     status: RedemptionStatus
     fulfilled_by: UUID | None
     fulfilled_at: datetime | None
+    cancelled_by: UUID | None
+    cancelled_at: datetime | None
+    refunded_by: UUID | None
+    refunded_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

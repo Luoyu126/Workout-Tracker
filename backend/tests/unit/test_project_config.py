@@ -240,28 +240,28 @@ def test_product_and_api_specs_align_match_log_write_permissions() -> None:
 
     for phrase in (
         "普通队员的比赛实时看板为只读",
-        "只有队长或管理员可以新增或删除比赛实时记录",
+        "只有球队管理员可以新增或删除比赛实时记录",
     ):
         assert phrase in requirements
 
     for phrase in (
-        "member：读取球队内容、维护自己的报名、只读查看比赛实时看板、兑换商品",
-        "仅 captain 或 admin 可用",
+        "member：队员账号，读取球队内容、维护自己的报名、只读查看比赛实时看板、兑换商品",
+        "仅 admin 可用",
         "普通 member 可以读取实时看板，但不能新增比赛实时记录",
     ):
         assert phrase in api_spec
 
-    assert "captain/admin-only goals/cards/substitutions" in readme
+    assert "admin-only goals/cards/substitutions" in readme
     assert "member read-only live board access" in readme
-    assert "captain/admin 可在 published match 新增或删除实时记录" in api_spec
+    assert "admin 可在 published match 新增或删除实时记录" in api_spec
     assert "member 只能只读查看实时看板" in api_spec
-    assert "captain/admin match log write" in (
+    assert "admin match log write" in (
         ROOT_DIR / "e2e" / "maestro" / "README.md"
     ).read_text(encoding="utf-8")
     assert "member read-only live board" in (
         ROOT_DIR / "e2e" / "maestro" / "README.md"
     ).read_text(encoding="utf-8")
-    assert "MembershipRole.captain" in match_service
+    assert "MembershipRole.admin" in match_service
 
 
 def test_match_log_creation_is_documented_and_implemented_as_idempotent() -> None:
@@ -490,10 +490,9 @@ def test_readme_mvp_status_tracks_recent_mobile_and_notification_flows() -> None
         "network-failure/offline recovery prompts",
     ):
         assert phrase in readme
-    assert "delete_event(session, temporary_event.id, captain)" in demo_flow
-    assert "NotificationType.event_updated" in demo_flow
-    assert "NotificationType.event_deleted" in demo_flow
-    assert "delete_match_log(session, yellow_card.id, captain)" in demo_flow
+    assert "delete_event(session, temporary_event.id, admin)" in demo_flow
+    assert "publish_event" not in demo_flow
+    assert "delete_match_log(session, yellow_card.id, admin)" in demo_flow
     assert 'match_board["counts"]["yellow_card"] == 0' in demo_flow
 
 
@@ -525,31 +524,16 @@ def test_completion_docs_reject_post_completion_attendance_correction() -> None:
     assert "coin clawback for rewards is not driven by attendance edits" in tech_stack
 
 
-def test_publish_event_is_documented_and_implemented_as_idempotent() -> None:
-    events_service = (ROOT_DIR / "backend" / "app" / "events" / "service.py").read_text(
-        encoding="utf-8"
-    )
+def test_publish_endpoint_is_removed_and_events_are_created_published() -> None:
+    events_service = (ROOT_DIR / "backend/app/events/service.py").read_text(encoding="utf-8")
+    events_router = (ROOT_DIR / "backend/app/events/router.py").read_text(encoding="utf-8")
+    openapi = json.loads((ROOT_DIR / "packages/api-client/openapi.json").read_text(encoding="utf-8"))
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
-    requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
-    tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
-
-    assert "_get_event_for_update" in events_service
-    assert "with_for_update()" in events_service
-    assert "if event.status == EventStatus.published:" in events_service
-    assert events_service.index("if event.status == EventStatus.published:") < events_service.index(
-        "if event.status != EventStatus.draft:"
-    )
-
-    for phrase in (
-        "重复发布已 published 的活动必须幂等返回当前 Event",
-        "不得重复创建 new_event Notification",
-        "重复发布必须幂等返回，不重复发送发布通知",
-    ):
-        assert phrase in api_spec
-    assert "重复发布必须幂等返回且不重复通知" in requirements
-    assert "Publishing an event locks the Event row" in tech_stack
-    assert "already published event as idempotent" in tech_stack
-    assert "creating duplicate notifications" in tech_stack
+    assert "status=EventStatus.published" in events_service
+    assert "publish_event" not in events_service
+    assert "/publish" not in events_router
+    assert "/api/v1/events/{event_id}/publish" not in openapi["paths"]
+    assert "POST /api/v1/events/{event_id}/publish" not in api_spec
 
 
 def test_delete_event_locks_event_before_notification_and_hard_delete() -> None:
@@ -569,20 +553,16 @@ def test_delete_event_locks_event_before_notification_and_hard_delete() -> None:
     delete_body = delete_body_match.group(0)
     assert "event = _get_event_for_update(session, event_id)" in delete_body
     assert delete_body.index("event = _get_event_for_update(session, event_id)") < delete_body.index(
-        "create_team_notifications("
+        "delete_event_notifications("
     )
     assert delete_body.index("event = _get_event_for_update(session, event_id)") < delete_body.index(
         "session.delete(event)"
     )
 
-    for phrase in (
-        "删除前后端锁定 Event 行",
-        "避免并发删除/通知竞态",
-    ):
-        assert phrase in api_spec
+    assert "删除前后端锁定 Event 行" in api_spec
+    assert "删除对应的 new_event Notification" in api_spec
     assert "后端先锁定目标活动" in requirements
     assert "Deleting an uncompleted event also locks the Event row" in tech_stack
-    assert "concurrent delete attempts cannot race notification creation" in tech_stack
 
 
 def test_event_creation_is_documented_and_implemented_as_idempotent() -> None:
@@ -610,16 +590,14 @@ def test_event_creation_is_documented_and_implemented_as_idempotent() -> None:
     assert "id: input.event.id ?? generateClientUuid()" in events_api
 
     for phrase in (
-        "客户端应生成 UUID `id` 并随请求提交",
+        "客户端可生成 UUID `id` 并随请求提交",
         "不重复创建活动或通知",
-        "客户端应在嵌套 `event` 中生成 UUID `id`",
-        "不重复创建 MatchDetails 或通知",
+        "相同 `event.id` 被不同请求复用时返回 409",
     ):
         assert phrase in api_spec
     assert "重复提交相同 `id` 和相同 payload 必须幂等返回且不重复通知" in requirements
     assert "创建比赛同样使用嵌套 `event.id` 幂等" in requirements
     assert "Event and match creation accept client-generated Event UUIDs" in tech_stack
-    assert "without creating a duplicate draft or notification" in tech_stack
     assert "requires identical MatchDetails" in tech_stack
 
 
@@ -631,7 +609,7 @@ def test_update_event_is_documented_and_implemented_as_noop_idempotent() -> None
     requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
     update_body = re.search(
-        r"def update_event\(.*?\n\n\ndef publish_event",
+        r"def update_event\(.*?\n\n\ndef delete_event",
         events_service,
         flags=re.DOTALL,
     )
@@ -641,18 +619,16 @@ def test_update_event_is_documented_and_implemented_as_noop_idempotent() -> None
     assert "has_changes = False" in update_body.group(0)
     assert "if getattr(event, field) != value:" in update_body.group(0)
     assert "if getattr(match_details, field) != value:" in update_body.group(0)
-    assert "if has_changes and event.status == EventStatus.published:" in update_body.group(0)
+    assert "if has_changes:" in update_body.group(0)
+    assert "sync_event_notifications(session, event)" in update_body.group(0)
 
     for phrase in (
-        "重复提交与当前状态完全一致的更新请求必须幂等返回当前 Event",
-        "不重复通知",
-        "重复提交相同更新不重复通知",
+        "重复提交与当前状态完全一致的更新请求幂等返回当前 Event",
+        "原有 new_event Notification 原地更新",
     ):
         assert phrase in api_spec
-    assert "重复提交相同更新必须幂等返回且不重复通知" in requirements
+    assert "重复提交相同更新必须幂等返回当前活动" in requirements
     assert "Updating an event locks the Event row" in tech_stack
-    assert "event-updated" in tech_stack
-    assert "notification batch" in tech_stack
     assert "Retrying the same update payload" in tech_stack
 
 
@@ -664,7 +640,7 @@ def test_api_spec_documents_user_summaries_on_mobile_member_lists() -> None:
         "报名列表和我的报名响应可由后端按 user_id 附带 UserSummary",
         "响应包含 `user` 摘要，移动端可直接展示姓名/邮箱",
         "响应中每条 EventSignup 包含 `user` 摘要",
-        "附带每名成员的 `user` 摘要用于移动端排行榜展示",
+        "附带每名队员的 `user` 摘要用于移动端排行榜展示",
     ):
         assert phrase in api_spec
 
@@ -1035,14 +1011,13 @@ def test_api_spec_documents_recent_visibility_boundaries() -> None:
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
 
     for phrase in (
-        "普通 member 不可通过 draft 活动 ID 读取报名状态",
+        "仅 active 的 role=member 可读取自己的报名状态",
         "current_membership",
         "当前用户在该球队的 active TeamMembership",
-        "普通 member 不可通过 event_id 读取",
-        "draft match 仅 captain/admin 可读取",
+        "active 球队成员均可读取 published 或 completed match 的实时记录",
         "即使显式传 is_active=false 也不会返回下架商品",
-        "通知内容保存活动标题和开始时间快照",
-        "通知内容保存比赛标题和开始时间快照",
+        "new_event Notification 原地更新",
+        "删除对应的 new_event Notification",
     ):
         assert phrase in api_spec
 
@@ -1050,10 +1025,10 @@ def test_api_spec_documents_recent_visibility_boundaries() -> None:
 def test_api_spec_documents_event_completion_match_details_boundaries() -> None:
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
 
-    completion_section = api_spec.split("### 8.8 完成活动", maxsplit=1)[1].split("## 9. 报名 API", maxsplit=1)[0]
+    completion_section = api_spec.split("### 8.7 完成活动", maxsplit=1)[1].split("## 9. 报名 API", maxsplit=1)[0]
 
     for phrase in (
-        "captain 或 admin 可用",
+        "仅 admin 可用",
         "published → completed",
         "比赛活动的请求可包含最终比赛数据",
         "训练或其他活动不得提交 match_details",
@@ -1068,7 +1043,7 @@ def test_api_spec_documents_event_completion_match_details_boundaries() -> None:
         assert phrase in completion_section
 
 
-def test_event_completion_rewards_historical_eligible_members() -> None:
+def test_event_completion_rewards_only_current_active_members() -> None:
     events_service = (ROOT_DIR / "backend" / "app" / "events" / "service.py").read_text(
         encoding="utf-8"
     )
@@ -1087,7 +1062,7 @@ def test_event_completion_rewards_historical_eligible_members() -> None:
     for phrase in (
         "TeamMembership.joined_at <= event.start_time",
         "TeamMembership.status == MembershipStatus.active",
-        "TeamMembership.left_at >= event.start_time",
+        "TeamMembership.role == MembershipRole.member",
     ):
         assert phrase in eligible_body
 
@@ -1099,11 +1074,10 @@ def test_event_completion_rewards_historical_eligible_members() -> None:
     ):
         assert phrase in complete_body
 
-    for doc in (api_spec, requirements, tech_stack):
-        assert "joined_at <= event.start_time" in doc
-        assert "left_at >= event.start_time" in doc
+    assert "joined_at <= event.start_time" in api_spec
+    assert "当前 active 的 `role=member`" in api_spec
 
-    assert "无报名记录的成员按 `maybe` 处理；不自动创建 absent 或其他出勤记录" in api_spec
+    assert "无报名记录的队员按 `maybe` 处理；不自动创建 absent 或其他出勤记录" in api_spec
     assert "不维护独立出勤记录，也不自动补 absent" in requirements
     assert "treat missing signup as `maybe`" in tech_stack
 
@@ -1131,7 +1105,7 @@ def test_api_spec_documents_idempotent_redemption_compensation() -> None:
         assert phrase in cancel_section
     for phrase in (
         "重复退款已 refunded 的兑换单必须幂等返回当前 Redemption",
-        "不得创建第二笔 refund 或重复恢复库存",
+        "已履约商品不恢复库存",
         "对非对应终态的跨状态错误操作仍返回冲突",
     ):
         assert phrase in refund_section
@@ -1175,9 +1149,9 @@ def test_coin_rule_creation_is_documented_and_implemented_as_idempotent() -> Non
     assert "id: input.id ?? generateClientUuid()" in coin_api
 
     for phrase in (
-        "客户端应生成 CoinRule UUID `id` 并随请求提交",
-        "幂等返回已有 CoinRule",
-        "避免网络重试重复创建训练/比赛报名奖励规则",
+        "amount 必须非负",
+        "不能创建第二条相同 trigger_type 的 active 训练或比赛报名规则",
+        "COIN_RULE_CONFLICT",
     ):
         assert phrase in api_spec
     assert "创建金币规则由客户端提交 UUID `id`" in requirements
@@ -1236,7 +1210,6 @@ def test_api_spec_documents_generated_mvp_endpoints() -> None:
         "POST /api/v1/teams/{team_id}/events",
         "POST /api/v1/teams/{team_id}/matches",
         "PATCH /api/v1/events/{event_id}",
-        "POST /api/v1/events/{event_id}/publish",
         "DELETE /api/v1/events/{event_id}",
         "POST /api/v1/events/{event_id}/complete",
         "GET /api/v1/events/{event_id}/signup",
@@ -1383,7 +1356,7 @@ def test_team_member_creation_is_documented_and_implemented_as_idempotent_on_tea
     assert "_membership_matches_create_request" in team_service
     assert "enum_value(membership.role) == enum_value(payload.role)" in team_service
     assert "membership.jersey_number == payload.jersey_number" in team_service
-    assert "membership.position == payload.position" in team_service
+    assert "membership.player_name == payload.player_name" in team_service
     assert "enum_value(membership.status) == enum_value(payload.status)" in team_service
     assert "return get_member(session, team_id, payload.user_id, user)" in team_service
     assert team_service.index("return get_member(session, team_id, payload.user_id, user)") < team_service.index(
@@ -1396,7 +1369,7 @@ def test_team_member_creation_is_documented_and_implemented_as_idempotent_on_tea
         "同一用户被不同成员内容重复添加时返回 409",
     ):
         assert phrase in api_spec
-    assert "重复添加同一用户且成员内容一致时幂等返回已有成员关系" in requirements
+    assert "同一用户与同一球队只能存在一条 `TeamMembership`" in requirements
     assert "Team membership creation is idempotent on the existing unique (team_id, user_id)" in tech_stack
     assert "returns the existing TeamMembership" in tech_stack
     assert "duplicate" in tech_stack

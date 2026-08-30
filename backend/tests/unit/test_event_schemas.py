@@ -27,7 +27,7 @@ def test_blank_note_for_going_signup_is_normalized_to_none() -> None:
     assert payload.note is None
 
 
-def test_event_schedule_requires_end_and_signup_deadline_not_after_start() -> None:
+def test_event_schedule_requires_end_after_start() -> None:
     start_time = datetime(2026, 8, 16, 12, 0, tzinfo=UTC)
 
     with pytest.raises(ValidationError, match="end_time must be after start_time"):
@@ -38,12 +38,11 @@ def test_event_schedule_requires_end_and_signup_deadline_not_after_start() -> No
             end_time=datetime(2026, 8, 16, 11, 0, tzinfo=UTC),
         )
 
-    with pytest.raises(ValidationError, match="signup_deadline must not be after start_time"):
+    with pytest.raises(ValidationError, match="end_time"):
         EventCreateRequest(
             type=EventType.training,
-            title="非法报名截止",
+            title="缺少结束时间",
             start_time=start_time,
-            signup_deadline=datetime(2026, 8, 16, 13, 0, tzinfo=UTC),
         )
 
     payload = EventCreateRequest(
@@ -51,6 +50,5 @@ def test_event_schedule_requires_end_and_signup_deadline_not_after_start() -> No
         title="合法活动",
         start_time=start_time,
         end_time=datetime(2026, 8, 16, 14, 0, tzinfo=UTC),
-        signup_deadline=start_time,
     )
     assert payload.end_time is not None

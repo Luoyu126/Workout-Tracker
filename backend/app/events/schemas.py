@@ -17,15 +17,12 @@ def _timestamp(value: datetime) -> float:
 def validate_schedule_window(
     start_time: datetime | None,
     end_time: datetime | None,
-    signup_deadline: datetime | None,
 ) -> None:
-    if start_time is None:
+    if start_time is None or end_time is None:
         return
     start_timestamp = _timestamp(start_time)
-    if end_time is not None and _timestamp(end_time) <= start_timestamp:
+    if _timestamp(end_time) <= start_timestamp:
         raise ValueError("end_time must be after start_time")
-    if signup_deadline is not None and _timestamp(signup_deadline) > start_timestamp:
-        raise ValueError("signup_deadline must not be after start_time")
 
 
 def validate_match_score_result(
@@ -72,8 +69,7 @@ class EventRead(BaseModel):
     description: str | None
     location: str | None
     start_time: datetime
-    end_time: datetime | None
-    signup_deadline: datetime | None
+    end_time: datetime
     status: EventStatus
     created_by: UUID
     created_at: datetime
@@ -90,8 +86,7 @@ class EventCreateRequest(BaseModel):
     description: str | None = None
     location: str | None = Field(default=None, max_length=240)
     start_time: datetime
-    end_time: datetime | None = None
-    signup_deadline: datetime | None = None
+    end_time: datetime
 
     @field_validator("title")
     @classmethod
@@ -105,7 +100,7 @@ class EventCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_event_schedule(self) -> "EventCreateRequest":
-        validate_schedule_window(self.start_time, self.end_time, self.signup_deadline)
+        validate_schedule_window(self.start_time, self.end_time)
         return self
 
 
@@ -153,7 +148,6 @@ class EventUpdateRequest(BaseModel):
     location: str | None = Field(default=None, max_length=240)
     start_time: datetime | None = None
     end_time: datetime | None = None
-    signup_deadline: datetime | None = None
     match_details: MatchDetailsUpdateRequest | None = None
 
     @field_validator("title")
@@ -168,7 +162,9 @@ class EventUpdateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_partial_schedule_window(self) -> "EventUpdateRequest":
-        validate_schedule_window(self.start_time, self.end_time, self.signup_deadline)
+        if "end_time" in self.model_fields_set and self.end_time is None:
+            raise ValueError("end_time must not be null")
+        validate_schedule_window(self.start_time, self.end_time)
         return self
 
 

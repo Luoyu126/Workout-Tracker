@@ -67,28 +67,31 @@ def _user(index: int) -> User:
 
 def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
     organization = Organization(name="Load Club", slug="load-club")
-    captain = User(auth_id=uuid4(), name="Load Captain", email="load-captain@example.test")
+    admin = User(auth_id=uuid4(), name="Load Admin", email="load-admin@example.test")
     player = User(auth_id=uuid4(), name="Load Player", email="load-player@example.test")
     extra_players = [_user(index) for index in range(30)]
-    session.add_all([organization, captain, player, *extra_players])
+    session.add_all([organization, admin, player, *extra_players])
     session.flush()
 
     team = Team(organization_id=organization.id, name="Load FC", logo_url="https://cdn.example.test/load-fc.png")
     session.add(team)
     session.flush()
+    joined_at = datetime.now(UTC) - timedelta(days=60)
     session.add_all(
         [
             TeamMembership(
                 team_id=team.id,
-                user_id=captain.id,
+                user_id=admin.id,
                 role=MembershipRole.admin,
                 status=MembershipStatus.active,
+                joined_at=joined_at,
             ),
             TeamMembership(
                 team_id=team.id,
                 user_id=player.id,
                 role=MembershipRole.member,
                 status=MembershipStatus.active,
+                joined_at=joined_at,
             ),
             *[
                 TeamMembership(
@@ -96,6 +99,7 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
                     user_id=extra_player.id,
                     role=MembershipRole.member,
                     status=MembershipStatus.active,
+                    joined_at=joined_at,
                 )
                 for extra_player in extra_players
             ],
@@ -112,8 +116,9 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
                 type=EventType.training,
                 title=f"Completed training {index}",
                 start_time=now - timedelta(days=index + 1),
+                end_time=now - timedelta(days=index + 1) + timedelta(hours=2),
                 status=EventStatus.completed,
-                created_by=captain.id,
+                created_by=admin.id,
             )
         )
         upcoming_events.append(
@@ -122,8 +127,9 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
                 type=EventType.training,
                 title=f"Upcoming training {index}",
                 start_time=now + timedelta(days=index + 1),
+                end_time=now + timedelta(days=index + 1) + timedelta(hours=2),
                 status=EventStatus.published,
-                created_by=captain.id,
+                created_by=admin.id,
             )
         )
     match = Event(
@@ -131,8 +137,9 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
         type=EventType.match,
         title="Load match",
         start_time=now + timedelta(days=3),
+        end_time=now + timedelta(days=3, hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add_all([*completed_events, *upcoming_events, match])
     session.flush()
@@ -155,7 +162,7 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
                     reason="Load reward",
                     reference_type="event",
                     reference_id=event.id,
-                    created_by=captain.id,
+                    created_by=admin.id,
                 )
             )
     session.add_all(signup_rows)
@@ -169,7 +176,7 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
             title=f"Load notification {index}",
             body="Load notification body",
             reference_type="team",
-            reference_id=team.id,
+            reference_id=uuid4(),
         )
         for index in range(120)
     ]
@@ -188,7 +195,7 @@ def seed_load_check_data(session: Session) -> tuple[Team, User, User, Event]:
     ]
     session.add_all(match_logs)
     session.commit()
-    return team, captain, player, match
+    return team, admin, player, match
 
 
 def run_load_check() -> dict[str, object]:

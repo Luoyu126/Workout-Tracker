@@ -192,17 +192,6 @@ export const apiEndpoints = [
     ]
   },
   {
-    "operationId": "post_publish_event_api_v1_events__event_id__publish_post",
-    "method": "POST",
-    "path": "/api/v1/events/{event_id}/publish",
-    "requestBody": null,
-    "response": "EventRead",
-    "statusCodes": [
-      200,
-      422
-    ]
-  },
-  {
     "operationId": "read_my_signup_api_v1_events__event_id__signup_get",
     "method": "GET",
     "path": "/api/v1/events/{event_id}/signup",

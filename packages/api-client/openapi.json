@@ -515,16 +515,9 @@
             "title": "Description"
           },
           "end_time": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Time"
+            "format": "date-time",
+            "title": "End Time",
+            "type": "string"
           },
           "id": {
             "anyOf": [
@@ -550,18 +543,6 @@
             ],
             "title": "Location"
           },
-          "signup_deadline": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Signup Deadline"
-          },
           "start_time": {
             "format": "date-time",
             "title": "Start Time",
@@ -580,7 +561,8 @@
         },
         "required": [
           "title",
-          "start_time"
+          "start_time",
+          "end_time"
         ],
         "title": "EventCreateRequest",
         "type": "object"
@@ -609,16 +591,9 @@
             "title": "Description"
           },
           "end_time": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Time"
+            "format": "date-time",
+            "title": "End Time",
+            "type": "string"
           },
           "id": {
             "format": "uuid",
@@ -645,18 +620,6 @@
                 "type": "null"
               }
             ]
-          },
-          "signup_deadline": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Signup Deadline"
           },
           "start_time": {
             "format": "date-time",
@@ -693,7 +656,6 @@
           "location",
           "start_time",
           "end_time",
-          "signup_deadline",
           "status",
           "created_by",
           "created_at",
@@ -810,10 +772,8 @@
       },
       "EventStatus": {
         "enum": [
-          "draft",
           "published",
-          "completed",
-          "cancelled"
+          "completed"
         ],
         "title": "EventStatus",
         "type": "string"
@@ -873,18 +833,6 @@
                 "type": "null"
               }
             ]
-          },
-          "signup_deadline": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Signup Deadline"
           },
           "start_time": {
             "anyOf": [
@@ -1508,7 +1456,7 @@
             ],
             "title": "Jersey Number"
           },
-          "position": {
+          "player_name": {
             "anyOf": [
               {
                 "maxLength": 64,
@@ -1518,7 +1466,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Player Name"
           },
           "role": {
             "$ref": "#/components/schemas/MembershipRole",
@@ -1564,9 +1512,16 @@
             "title": "Jersey Number"
           },
           "joined_at": {
-            "format": "date-time",
-            "title": "Joined At",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joined At"
           },
           "left_at": {
             "anyOf": [
@@ -1580,7 +1535,7 @@
             ],
             "title": "Left At"
           },
-          "position": {
+          "player_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -1589,7 +1544,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Player Name"
           },
           "role": {
             "$ref": "#/components/schemas/MembershipRole"
@@ -1629,7 +1584,7 @@
           "user_id",
           "role",
           "jersey_number",
-          "position",
+          "player_name",
           "status",
           "joined_at",
           "left_at",
@@ -1642,7 +1597,6 @@
       "MembershipRole": {
         "enum": [
           "member",
-          "captain",
           "admin"
         ],
         "title": "MembershipRole",
@@ -1683,7 +1637,7 @@
             ],
             "title": "Left At"
           },
-          "position": {
+          "player_name": {
             "anyOf": [
               {
                 "maxLength": 64,
@@ -1693,7 +1647,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Player Name"
           },
           "role": {
             "anyOf": [
@@ -1794,6 +1748,11 @@
           "type": {
             "$ref": "#/components/schemas/NotificationType"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
           "user_id": {
             "format": "uuid",
             "title": "User Id",
@@ -1811,6 +1770,7 @@
           "reference_id",
           "read_at",
           "created_at",
+          "updated_at",
           "expires_at"
         ],
         "title": "NotificationRead",
@@ -1819,8 +1779,6 @@
       "NotificationType": {
         "enum": [
           "new_event",
-          "event_updated",
-          "event_deleted",
           "coin_earned",
           "redemption_completed",
           "team_announcement"
@@ -1904,6 +1862,30 @@
       },
       "RedemptionRead": {
         "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancelled_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1941,6 +1923,30 @@
           "quantity": {
             "title": "Quantity",
             "type": "integer"
+          },
+          "refunded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refunded At"
+          },
+          "refunded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refunded By"
           },
           "status": {
             "$ref": "#/components/schemas/RedemptionStatus"
@@ -1995,6 +2001,10 @@
           "status",
           "fulfilled_by",
           "fulfilled_at",
+          "cancelled_by",
+          "cancelled_at",
+          "refunded_by",
+          "refunded_at",
           "created_at",
           "updated_at"
         ],
@@ -2336,11 +2346,11 @@
       },
       "TeamHomeRead": {
         "properties": {
-          "captains": {
+          "admins": {
             "items": {
               "$ref": "#/components/schemas/MembershipRead"
             },
-            "title": "Captains",
+            "title": "Admins",
             "type": "array"
           },
           "coin_summary": {
@@ -2379,7 +2389,7 @@
         "required": [
           "team",
           "current_membership",
-          "captains",
+          "admins",
           "member_count",
           "upcoming_events",
           "signup_summary",
@@ -3343,54 +3353,6 @@
         "summary": "Post Match Log",
         "tags": [
           "matches"
-        ]
-      }
-    },
-    "/api/v1/events/{event_id}/publish": {
-      "post": {
-        "operationId": "post_publish_event_api_v1_events__event_id__publish_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "event_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Event Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Post Publish Event",
-        "tags": [
-          "events"
         ]
       }
     },

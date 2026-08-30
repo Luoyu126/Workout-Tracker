@@ -83,14 +83,16 @@ def _ensure_member(session: Session, team_id: uuid.UUID) -> User:
                 role=MembershipRole.member,
                 status=MembershipStatus.active,
                 jersey_number="9",
-                position="Forward",
+                player_name=member.name,
+                joined_at=datetime.now(UTC),
             )
         )
     else:
         membership.role = MembershipRole.member
         membership.status = MembershipStatus.active
         membership.jersey_number = membership.jersey_number or "9"
-        membership.position = membership.position or "Forward"
+        membership.player_name = membership.player_name or member.name
+        membership.joined_at = membership.joined_at or datetime.now(UTC)
 
     return member
 
@@ -149,7 +151,6 @@ def _ensure_published_event(
             location="Device Smoke Field",
             start_time=start_time,
             end_time=start_time + timedelta(hours=2),
-            signup_deadline=start_time - timedelta(days=1),
             status=EventStatus.published,
             created_by=admin_id,
         )
@@ -161,7 +162,6 @@ def _ensure_published_event(
         event.location = "Device Smoke Field"
         event.start_time = start_time
         event.end_time = start_time + timedelta(hours=2)
-        event.signup_deadline = start_time - timedelta(days=1)
         event.status = EventStatus.published
 
     if event_type == EventType.match:

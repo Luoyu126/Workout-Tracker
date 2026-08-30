@@ -19,7 +19,6 @@ from app.common.enums import (
     MatchResult,
     MembershipRole,
     MembershipStatus,
-    NotificationType,
     SignupStatus,
 )
 from app.events.match_schemas import MatchLogEntryCreateRequest
@@ -38,7 +37,6 @@ from app.events.service import (
     create_event,
     create_match,
     delete_event,
-    publish_event,
     update_event,
     upsert_my_signup,
 )
@@ -47,7 +45,6 @@ from app.models import (
     CoinTransaction,
     Event,
     MatchDetails,
-    Notification,
     Organization,
     StoreItem,
     Team,
@@ -87,12 +84,12 @@ def _user(name: str, email: str) -> User:
 
 def seed_demo_team(session: Session) -> tuple[Team, User, User]:
     organization = Organization(name="Demo Club", slug="demo-club")
-    captain = _user("队长陈", "captain@example.com")
+    admin = _user("队长陈", "admin@example.com")
     player = _user("球员林", "player@example.com")
-    session.add_all([organization, captain, player])
+    session.add_all([organization, admin, player])
     session.flush()
 
-    captain.avatar_url = "https://cdn.example.test/captain.png"
+    admin.avatar_url = "https://cdn.example.test/admin.png"
     player.avatar_url = "https://cdn.example.test/player.png"
 
     team = Team(
@@ -102,103 +99,99 @@ def seed_demo_team(session: Session) -> tuple[Team, User, User]:
     )
     session.add(team)
     session.flush()
+    joined_at = datetime.now(UTC) - timedelta(days=1)
     session.add_all(
         [
             TeamMembership(
                 team_id=team.id,
-                user_id=captain.id,
+                user_id=admin.id,
                 role=MembershipRole.admin,
                 status=MembershipStatus.active,
+                joined_at=joined_at,
             ),
             TeamMembership(
                 team_id=team.id,
                 user_id=player.id,
                 role=MembershipRole.member,
                 status=MembershipStatus.active,
+                joined_at=joined_at,
             ),
             CoinRule(
                 team_id=team.id,
                 name="训练报名奖励",
                 trigger_type=CoinRuleTrigger.training_signup,
                 amount=10,
-                created_by=captain.id,
+                created_by=admin.id,
             ),
             CoinRule(
                 team_id=team.id,
                 name="比赛报名奖励",
                 trigger_type=CoinRuleTrigger.match_signup,
                 amount=20,
-                created_by=captain.id,
+                created_by=admin.id,
             ),
         ]
     )
     session.commit()
-    return team, captain, player
+    return team, admin, player
 
 
 def run_demo_flow() -> dict[str, object]:
     with demo_session() as session:
-        team, captain, player = seed_demo_team(session)
+        team, admin, player = seed_demo_team(session)
+        event_start = datetime.now(UTC) + timedelta(days=1)
         event = create_event(
             session,
             team.id,
-            captain,
+            admin,
             EventCreateRequest(
                 type=EventType.training,
                 title="Demo 周末训练",
                 location="主球场",
-                start_time=datetime.now(UTC) + timedelta(days=1),
+                start_time=event_start,
+                end_time=event_start + timedelta(hours=2),
             ),
         )
-        publish_event(session, event.id, captain)
-        assert unread_count(session, player) == 2
+        assert unread_count(session, player) == 1
 
+        temporary_start = datetime.now(UTC) + timedelta(days=3)
         temporary_event = create_event(
             session,
             team.id,
-            captain,
+            admin,
             EventCreateRequest(
                 type=EventType.training,
                 title="Demo 临时训练",
                 location="副球场",
-                start_time=datetime.now(UTC) + timedelta(days=3),
+                start_time=temporary_start,
+                end_time=temporary_start + timedelta(hours=2),
             ),
         )
-        publish_event(session, temporary_event.id, captain)
         update_event(
             session,
             temporary_event.id,
-            captain,
+            admin,
             EventUpdateRequest(title="Demo 临时训练改期"),
         )
-        delete_event(session, temporary_event.id, captain)
-        event_update_notifications = session.scalars(
-            select(Notification).where(Notification.type == NotificationType.event_updated)
-        ).all()
-        event_delete_notifications = session.scalars(
-            select(Notification).where(Notification.type == NotificationType.event_deleted)
-        ).all()
+        delete_event(session, temporary_event.id, admin)
         assert session.get(Event, temporary_event.id) is None
-        assert len(event_update_notifications) == 2
-        assert len(event_delete_notifications) == 2
-        assert all(notification.reference_type == "event_snapshot" for notification in event_delete_notifications)
-        assert all(notification.reference_id is None for notification in event_delete_notifications)
-        assert unread_count(session, player) == 6
+        assert unread_count(session, player) == 1
 
+        match_start = datetime.now(UTC) + timedelta(days=2)
         match = create_match(
             session,
             team.id,
-            captain,
+            admin,
             MatchCreateRequest(
                 event=EventCreateRequest(
                     title="Demo 友谊赛",
                     location="客场",
-                    start_time=datetime.now(UTC) + timedelta(days=2),
+                    start_time=match_start,
+                    end_time=match_start + timedelta(hours=2),
                 ),
                 match_details=MatchDetailsCreateRequest(opponent="Demo United"),
             ),
         )
-        publish_event(session, match.id, captain)
         signup = upsert_my_signup(
             session,
             match.id,
@@ -208,7 +201,7 @@ def run_demo_flow() -> dict[str, object]:
         create_match_log(
             session,
             match.id,
-            captain,
+            admin,
             MatchLogEntryCreateRequest(
                 entry_type=MatchEntryType.goal,
                 minute=12,
@@ -219,7 +212,7 @@ def run_demo_flow() -> dict[str, object]:
         yellow_card = create_match_log(
             session,
             match.id,
-            captain,
+            admin,
             MatchLogEntryCreateRequest(
                 entry_type=MatchEntryType.yellow_card,
                 minute=16,
@@ -227,23 +220,16 @@ def run_demo_flow() -> dict[str, object]:
                 player_number="9",
             ),
         )
-        delete_match_log(session, yellow_card.id, captain)
+        delete_match_log(session, yellow_card.id, admin)
         match_board = live_board(session, match.id, player)
         assert signup.status == SignupStatus.going
         assert match_board["counts"]["goal"] == 1
         assert match_board["counts"]["yellow_card"] == 0
-        assert unread_count(session, player) == 8
-
-        upsert_my_signup(
-            session,
-            match.id,
-            captain,
-            EventSignupUpsertRequest(status=SignupStatus.going, note=None),
-        )
+        assert unread_count(session, player) == 2
         match_completion = complete_event(
             session,
             match.id,
-            captain,
+            admin,
             EventCompletionRequest(
                 match_details=MatchDetailsUpdateRequest(
                     team_score=2,
@@ -254,12 +240,12 @@ def run_demo_flow() -> dict[str, object]:
             ),
         )
         match_details = session.scalar(select(MatchDetails).where(MatchDetails.event_id == match.id))
-        assert match_completion["going_count"] == 2
+        assert match_completion["going_count"] == 1
         assert match_details is not None
         assert match_details.team_score == 2
         assert match_details.opponent_score == 1
         assert match_details.result == MatchResult.win
-        assert coin_balance(session, team.id, captain, player.id) == 20
+        assert coin_balance(session, team.id, admin, player.id) == 20
 
         upsert_my_signup(
             session,
@@ -267,15 +253,9 @@ def run_demo_flow() -> dict[str, object]:
             player,
             EventSignupUpsertRequest(status=SignupStatus.going),
         )
-        upsert_my_signup(
-            session,
-            event.id,
-            captain,
-            EventSignupUpsertRequest(status=SignupStatus.going),
-        )
-        completion = complete_event(session, event.id, captain)
-        assert completion["going_count"] == 2
-        assert coin_balance(session, team.id, captain, player.id) == 30
+        completion = complete_event(session, event.id, admin)
+        assert completion["going_count"] == 1
+        assert coin_balance(session, team.id, admin, player.id) == 30
 
         session.add(
             CoinTransaction(
@@ -284,7 +264,7 @@ def run_demo_flow() -> dict[str, object]:
                 amount=50,
                 type=CoinTransactionType.admin_adjustment,
                 reason="Demo seed balance",
-                created_by=captain.id,
+                created_by=admin.id,
             )
         )
         session.commit()
@@ -292,7 +272,7 @@ def run_demo_flow() -> dict[str, object]:
         item = create_store_item(
             session,
             team.id,
-            captain,
+            admin,
             StoreItemCreateRequest(
                 name="Demo 队袜",
                 image_url="https://cdn.example.test/socks.png",
@@ -307,24 +287,24 @@ def run_demo_flow() -> dict[str, object]:
             player,
             RedemptionCreateRequest(id=uuid4(), store_item_id=item.id, quantity=1),
         )
-        assert coin_balance(session, team.id, captain, player.id) == 65
+        assert coin_balance(session, team.id, admin, player.id) == 65
         assert session.get(StoreItem, item.id).stock == 1
 
-        fulfill_redemption(session, redemption.id, captain)
-        refund_redemption(session, redemption.id, captain)
-        assert coin_balance(session, team.id, captain, player.id) == 80
-        assert session.get(StoreItem, item.id).stock == 2
+        fulfill_redemption(session, redemption.id, admin)
+        refund_redemption(session, redemption.id, admin)
+        assert coin_balance(session, team.id, admin, player.id) == 80
+        assert session.get(StoreItem, item.id).stock == 1
 
         announcement_notifications = create_team_announcement(
             session,
             team.id,
-            captain,
+            admin,
             announcement_id=uuid4(),
             title="Demo 球队公告",
             body="周末训练后一起拉伸恢复。",
         )
-        assert {notification.user_id for notification in announcement_notifications} == {captain.id, player.id}
-        assert unread_count(session, player) == 12
+        assert {notification.user_id for notification in announcement_notifications} == {admin.id, player.id}
+        assert unread_count(session, player) == 6
 
         return {
             "team": team.name,
@@ -337,7 +317,7 @@ def run_demo_flow() -> dict[str, object]:
             "match_final_score": f"{match_details.team_score}-{match_details.opponent_score}",
             "match_result": match_details.result,
             "completion": completion,
-            "player_balance": coin_balance(session, team.id, captain, player.id),
+            "player_balance": coin_balance(session, team.id, admin, player.id),
             "store_stock": session.get(StoreItem, item.id).stock,
             "store_image_url": session.get(StoreItem, item.id).image_url,
             "player_unread_notifications": unread_count(session, player),

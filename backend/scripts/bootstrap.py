@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -105,11 +106,13 @@ def bootstrap(
                 user_id=admin.id,
                 role=MembershipRole.admin,
                 status=MembershipStatus.active,
+                joined_at=datetime.now(UTC),
             )
         )
     else:
         membership.role = MembershipRole.admin
         membership.status = MembershipStatus.active
+        membership.joined_at = membership.joined_at or datetime.now(UTC)
 
     default_rules = [
         ("Training signup", CoinRuleTrigger.training_signup, training_reward),

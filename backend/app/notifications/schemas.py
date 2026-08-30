@@ -21,6 +21,7 @@ class NotificationRead(BaseModel):
     reference_id: UUID | None
     read_at: datetime | None
     created_at: datetime
+    updated_at: datetime
     expires_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)

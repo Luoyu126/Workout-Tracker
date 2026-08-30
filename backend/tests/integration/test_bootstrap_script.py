@@ -293,11 +293,11 @@ def test_device_smoke_seed_creates_persistent_idempotent_smoke_data(
     assert training is not None
     assert training.type == EventType.training
     assert training.status == EventStatus.published
-    assert training.signup_deadline is not None
+    assert training.end_time > training.start_time
     assert match is not None
     assert match.type == EventType.match
     assert match.status == EventStatus.published
-    assert match.signup_deadline is not None
+    assert match.end_time > match.start_time
 
     item = session.get(StoreItem, first.store_item_id)
     assert item is not None
@@ -449,11 +449,11 @@ def test_device_smoke_seed_creates_fresh_published_events_when_previous_smoke_ev
     assert second_training is not None
     assert second_training.title == "Device Smoke Training"
     assert second_training.status == EventStatus.published
-    assert second_training.signup_deadline is not None
-    signup_deadline = second_training.signup_deadline
-    if signup_deadline.tzinfo is None:
-        signup_deadline = signup_deadline.replace(tzinfo=UTC)
-    assert signup_deadline > datetime.now(UTC)
+    assert second_training.end_time > second_training.start_time
+    start_time = second_training.start_time
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=UTC)
+    assert start_time > datetime.now(UTC)
     assert second_match is not None
     assert second_match.title == "Device Smoke Match"
     assert second_match.status == EventStatus.published

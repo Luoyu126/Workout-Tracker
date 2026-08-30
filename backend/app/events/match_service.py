@@ -18,7 +18,7 @@ from app.events.service import (
     _get_match_details,
     _read_event_with_details,
 )
-from app.models import CoinTransaction, Event, EventSignup, MatchLogEntry, User
+from app.models import CoinTransaction, Event, EventSignup, MatchLogEntry, TeamMembership, User
 from app.teams.service import require_team_role
 
 
@@ -57,7 +57,7 @@ def create_match_log(
     event = _get_match_event(session, event_id)
     _ensure_event_visible(session, event, user)
     _ensure_match_published(event)
-    require_team_role(session, event.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, event.team_id, user.id, MembershipRole.admin)
 
     create_data = payload.model_dump(exclude={"id"})
     if payload.id is not None:
@@ -105,7 +105,7 @@ def delete_match_log(session: Session, log_id: UUID, user: User) -> None:
         raise MatchLogNotFoundError("Match log not found")
     event = _get_match_event(session, log.event_id)
     _ensure_match_published(event)
-    require_team_role(session, event.team_id, user.id, MembershipRole.captain)
+    require_team_role(session, event.team_id, user.id, MembershipRole.admin)
     session.delete(log)
     session.commit()
 
@@ -133,7 +133,18 @@ def match_summary(session: Session, event_id: UUID, user: User) -> dict[str, obj
     event = _get_match_event(session, event_id)
     _ensure_event_visible(session, event, user)
     logs = list_match_logs(session, event_id, user)
-    signups = session.scalars(select(EventSignup).where(EventSignup.event_id == event_id)).all()
+    signups = session.scalars(
+        select(EventSignup)
+        .join(
+            TeamMembership,
+            (TeamMembership.team_id == event.team_id)
+            & (TeamMembership.user_id == EventSignup.user_id),
+        )
+        .where(
+            EventSignup.event_id == event_id,
+            TeamMembership.role == MembershipRole.member,
+        )
+    ).all()
     rewards = session.scalars(
         select(CoinTransaction).where(
             CoinTransaction.team_id == event.team_id,

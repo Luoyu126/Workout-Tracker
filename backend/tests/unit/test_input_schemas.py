@@ -10,7 +10,13 @@ from app.coins.schemas import (
     CoinTransactionCreateRequest,
     CoinTransactionRead,
 )
-from app.common.enums import CoinRuleTrigger, CoinTransactionType, EventType, MatchEntryType, SignupStatus
+from app.common.enums import (
+    CoinRuleTrigger,
+    CoinTransactionType,
+    EventType,
+    MatchEntryType,
+    SignupStatus,
+)
 from app.events.match_schemas import MatchLogEntryCreateRequest
 from app.events.schemas import (
     EventCreateRequest,
@@ -144,6 +150,7 @@ def test_core_optional_text_fields_are_stripped_and_blank_becomes_none() -> None
         description="  控球  ",
         location="   ",
         start_time="2026-08-16T12:00:00Z",
+        end_time="2026-08-16T14:00:00Z",
     )
     assert event.description == "控球"
     assert event.location is None
@@ -154,7 +161,7 @@ def test_core_optional_text_fields_are_stripped_and_blank_becomes_none() -> None
 
     assert TeamUpdateRequest(description="  简介  ", logo_url="   ").description == "简介"
     assert MembershipCreateRequest(user_id="550e8400-e29b-41d4-a716-446655440000", jersey_number="  9  ").jersey_number == "9"
-    assert MembershipUpdateRequest(position="   ").position is None
+    assert MembershipUpdateRequest(player_name="   ").player_name is None
 
     assert StoreItemCreateRequest(name="队袜", description="  厚款  ", image_url="   ", price=10).description == "厚款"
     assert StoreItemUpdateRequest(description="   ", image_url="  https://cdn.example.test/socks.png  ").image_url == (

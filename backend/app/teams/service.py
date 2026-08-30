@@ -44,7 +44,7 @@ def _membership_matches_create_request(membership: TeamMembership, payload: Memb
         membership.user_id == payload.user_id
         and enum_value(membership.role) == enum_value(payload.role)
         and membership.jersey_number == payload.jersey_number
-        and membership.position == payload.position
+        and membership.player_name == payload.player_name
         and enum_value(membership.status) == enum_value(payload.status)
     )
 
@@ -108,11 +108,11 @@ def get_team_for_member(session: Session, team_id: UUID, user: User) -> Team:
 
 
 def update_team(session: Session, team_id: UUID, user: User, payload: TeamUpdateRequest) -> Team:
-    membership = require_team_role(
+    require_team_role(
         session,
         team_id,
         user.id,
-        MembershipRole.captain,
+        MembershipRole.admin,
         require_active_team=False,
     )
     team = session.get(Team, team_id)
@@ -120,8 +120,6 @@ def update_team(session: Session, team_id: UUID, user: User, payload: TeamUpdate
         raise TeamNotFoundError("Team not found")
 
     update_data = payload.model_dump(exclude_unset=True)
-    if "status" in update_data and not role_at_least(membership.role, MembershipRole.admin):
-        raise PermissionDeniedError("Only admins can update team status")
     if team.status == TeamStatus.archived and update_data.get("status") != TeamStatus.active:
         raise PermissionDeniedError("Archived teams can only be reactivated")
 
@@ -190,7 +188,10 @@ def add_member(
             return get_member(session, team_id, payload.user_id, user)
         raise DuplicateMembershipError("Membership already exists")
 
-    membership = TeamMembership(team_id=team_id, **payload.model_dump())
+    membership_data = payload.model_dump()
+    if payload.status == MembershipStatus.active:
+        membership_data["joined_at"] = datetime.now(UTC)
+    membership = TeamMembership(team_id=team_id, **membership_data)
     session.add(membership)
     session.commit()
     session.refresh(membership)
@@ -262,6 +263,8 @@ def update_member(
             update_data["left_at"] = datetime.now(UTC)
         elif update_data["status"] in {MembershipStatus.active, MembershipStatus.pending}:
             update_data["left_at"] = None
+    if update_data.get("status") == MembershipStatus.active and membership.joined_at is None:
+        update_data["joined_at"] = datetime.now(UTC)
 
     for field, value in update_data.items():
         setattr(membership, field, value)
@@ -295,11 +298,11 @@ def _lock_active_admin_memberships(session: Session, team_id: UUID) -> None:
 def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, object]:
     team = get_team_for_member(session, team_id, user)
     current_membership = get_active_membership(session, team_id, user.id)
-    captains = list_members(
+    admins = list_members(
         session,
         team_id,
         user,
-        role=MembershipRole.captain,
+        role=MembershipRole.admin,
         status=MembershipStatus.active,
     )
     member_count = session.scalar(
@@ -335,7 +338,16 @@ def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, ob
     signup_rows = session.execute(
         select(EventSignup.status, func.count().label("count"))
         .join(Event, Event.id == EventSignup.event_id)
-        .where(Event.team_id == team_id, Event.status == EventStatus.completed)
+        .join(
+            TeamMembership,
+            (TeamMembership.team_id == Event.team_id)
+            & (TeamMembership.user_id == EventSignup.user_id),
+        )
+        .where(
+            Event.team_id == team_id,
+            Event.status == EventStatus.completed,
+            TeamMembership.role == MembershipRole.member,
+        )
         .group_by(EventSignup.status)
     )
     total_signups = 0
@@ -358,7 +370,7 @@ def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, ob
     return {
         "team": team,
         "current_membership": current_membership,
-        "captains": captains,
+        "admins": admins,
         "member_count": member_count,
         "upcoming_events": upcoming_events,
         "signup_summary": signup_summary,
@@ -398,6 +410,8 @@ def signup_board(
             session.scalars(
                 select(TeamMembership.user_id).where(
                     TeamMembership.team_id == event.team_id,
+                    TeamMembership.role == MembershipRole.member,
+                    TeamMembership.joined_at.is_not(None),
                     TeamMembership.joined_at <= event.start_time,
                     (
                         (TeamMembership.status == MembershipStatus.active)

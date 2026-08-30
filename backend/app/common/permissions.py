@@ -12,8 +12,7 @@ class PermissionDeniedError(Exception):
 
 ROLE_RANK: dict[MembershipRole, int] = {
     MembershipRole.member: 1,
-    MembershipRole.captain: 2,
-    MembershipRole.admin: 3,
+    MembershipRole.admin: 2,
 }
 
 

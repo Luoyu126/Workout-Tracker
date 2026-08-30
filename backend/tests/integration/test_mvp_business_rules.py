@@ -58,10 +58,10 @@ def _user(name: str) -> User:
 
 def _seed_team(session: Session) -> tuple[Team, User, User, User]:
     organization = Organization(name="Test Org", slug=f"test-org-{uuid4().hex[:8]}")
-    captain = _user("Captain")
+    admin = _user("Admin")
     player = _user("Player")
     missing_player = _user("Missing Player")
-    session.add_all([organization, captain, player, missing_player])
+    session.add_all([organization, admin, player, missing_player])
     session.flush()
 
     team = Team(organization_id=organization.id, name="MVP Team")
@@ -71,7 +71,7 @@ def _seed_team(session: Session) -> tuple[Team, User, User, User]:
         [
             TeamMembership(
                 team_id=team.id,
-                user_id=captain.id,
+                user_id=admin.id,
                 role=MembershipRole.admin,
                 status=MembershipStatus.active,
             ),
@@ -90,10 +90,10 @@ def _seed_team(session: Session) -> tuple[Team, User, User, User]:
         ]
     )
     session.commit()
-    return team, captain, player, missing_player
+    return team, admin, player, missing_player
 
 
-def _add_signup_rules(session: Session, team: Team, captain: User) -> None:
+def _add_signup_rules(session: Session, team: Team, admin: User) -> None:
     session.add_all(
         [
             CoinRule(
@@ -101,14 +101,14 @@ def _add_signup_rules(session: Session, team: Team, captain: User) -> None:
                 name="训练报名",
                 trigger_type=CoinRuleTrigger.training_signup,
                 amount=10,
-                created_by=captain.id,
+                created_by=admin.id,
             ),
             CoinRule(
                 team_id=team.id,
                 name="比赛报名",
                 trigger_type=CoinRuleTrigger.match_signup,
                 amount=20,
-                created_by=captain.id,
+                created_by=admin.id,
             ),
         ]
     )
@@ -131,21 +131,22 @@ def _add_signup(
 def test_completion_rewards_going_signups_and_treats_missing_as_maybe(
     session: Session,
 ) -> None:
-    team, captain, player, missing_player = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, player, missing_player = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     event = Event(
         team_id=team.id,
         type=EventType.training,
         title="周三训练",
         start_time=datetime.now(UTC) + timedelta(days=1),
+        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add(event)
     session.commit()
 
     _add_signup(session, event, player, SignupStatus.going)
-    result = complete_event(session, event.id, captain)
+    result = complete_event(session, event.id, admin)
 
     assert result["status"] == EventStatus.completed
     assert result["going_count"] == 1
@@ -157,14 +158,14 @@ def test_completion_rewards_going_signups_and_treats_missing_as_maybe(
         ).all()
         == []
     )
-    assert coin_balance(session, team.id, captain, player.id) == 10
-    assert coin_balance(session, team.id, captain, missing_player.id) == 0
-    assert coin_balance(session, team.id, captain, captain.id) == 0
+    assert coin_balance(session, team.id, admin, player.id) == 10
+    assert coin_balance(session, team.id, admin, missing_player.id) == 0
+    assert coin_balance(session, team.id, admin, admin.id) == 0
 
 
 def test_signup_reward_uses_configured_coin_rule_amount(session: Session) -> None:
-    team, captain, player, _ = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, player, _ = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     training_rule = session.scalar(
         select(CoinRule).where(
             CoinRule.team_id == team.id,
@@ -178,14 +179,15 @@ def test_signup_reward_uses_configured_coin_rule_amount(session: Session) -> Non
         type=EventType.training,
         title="自定义金币训练",
         start_time=datetime.now(UTC) + timedelta(days=1),
+        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add(event)
     session.commit()
 
     _add_signup(session, event, player, SignupStatus.going)
-    complete_event(session, event.id, captain)
+    complete_event(session, event.id, admin)
 
     reward = session.scalar(
         select(CoinTransaction).where(
@@ -198,35 +200,37 @@ def test_signup_reward_uses_configured_coin_rule_amount(session: Session) -> Non
     )
     assert reward is not None
     assert reward.amount == 17
-    assert coin_balance(session, team.id, captain, player.id) == 17
+    assert coin_balance(session, team.id, admin, player.id) == 17
 
 
 def test_match_going_uses_match_signup_rule_instead_of_training_rule(session: Session) -> None:
-    team, captain, player, _ = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, player, _ = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     training_event = Event(
         team_id=team.id,
         type=EventType.training,
         title="训练报名奖励",
         start_time=datetime.now(UTC) + timedelta(days=1),
+        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     match_event = Event(
         team_id=team.id,
         type=EventType.match,
         title="比赛报名奖励",
         start_time=datetime.now(UTC) + timedelta(days=2),
+        end_time=datetime.now(UTC) + timedelta(days=2) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add_all([training_event, match_event])
     session.commit()
 
     _add_signup(session, training_event, player, SignupStatus.going)
     _add_signup(session, match_event, player, SignupStatus.going)
-    complete_event(session, training_event.id, captain)
-    complete_event(session, match_event.id, captain)
+    complete_event(session, training_event.id, admin)
+    complete_event(session, match_event.id, admin)
 
     rewards = session.scalars(
         select(CoinTransaction)
@@ -242,26 +246,27 @@ def test_match_going_uses_match_signup_rule_instead_of_training_rule(session: Se
     assert [reward.amount for reward in rewards] == [10, 20]
     assert {reward.reference_id for reward in rewards} == {training_event.id, match_event.id}
     assert {reward.metadata_["status"] for reward in rewards} == {"going"}
-    assert coin_balance(session, team.id, captain, player.id) == 30
+    assert coin_balance(session, team.id, admin, player.id) == 30
 
 
 def test_maybe_and_not_going_do_not_receive_signup_rewards(session: Session) -> None:
-    team, captain, player, missing_player = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, player, missing_player = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     event = Event(
         team_id=team.id,
         type=EventType.training,
         title="非 going 不发币",
         start_time=datetime.now(UTC) + timedelta(days=1),
+        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add(event)
     session.commit()
 
     _add_signup(session, event, player, SignupStatus.maybe)
     _add_signup(session, event, missing_player, SignupStatus.not_going, note="有课")
-    result = complete_event(session, event.id, captain)
+    result = complete_event(session, event.id, admin)
 
     assert result["going_count"] == 0
     assert result["reward_count"] == 0
@@ -277,22 +282,23 @@ def test_maybe_and_not_going_do_not_receive_signup_rewards(session: Session) -> 
 
 
 def test_repeating_completed_event_settlement_is_idempotent(session: Session) -> None:
-    team, captain, player, _ = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, player, _ = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     event = Event(
         team_id=team.id,
         type=EventType.training,
         title="重复完成不重复发币",
         start_time=datetime.now(UTC) + timedelta(days=1),
+        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add(event)
     session.commit()
 
     _add_signup(session, event, player, SignupStatus.going)
-    first_result = complete_event(session, event.id, captain)
-    second_result = complete_event(session, event.id, captain)
+    first_result = complete_event(session, event.id, admin)
+    second_result = complete_event(session, event.id, admin)
 
     assert first_result["reward_count"] == 1
     assert first_result["going_count"] == 1
@@ -309,14 +315,14 @@ def test_repeating_completed_event_settlement_is_idempotent(session: Session) ->
         )
     ).all()
     assert [reward.amount for reward in rewards] == [10]
-    assert coin_balance(session, team.id, captain, player.id) == 10
+    assert coin_balance(session, team.id, admin, player.id) == 10
 
 
-def test_completion_rewards_only_members_eligible_at_event_start(
+def test_completion_rewards_only_current_active_members_eligible_at_event_start(
     session: Session,
 ) -> None:
-    team, captain, _, _ = _seed_team(session)
-    _add_signup_rules(session, team, captain)
+    team, admin, _, _ = _seed_team(session)
+    _add_signup_rules(session, team, admin)
     event_start = datetime.now(UTC) + timedelta(days=2)
     former_player = _user("Former Player")
     late_joiner = _user("Late Joiner")
@@ -326,8 +332,9 @@ def test_completion_rewards_only_members_eligible_at_event_start(
         type=EventType.training,
         title="按历史成员资格结算报名",
         start_time=event_start,
+        end_time=event_start + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add_all([former_player, late_joiner, old_inactive_player, event])
     session.flush()
@@ -375,19 +382,18 @@ def test_completion_rewards_only_members_eligible_at_event_start(
     )
     session.commit()
 
-    result = complete_event(session, event.id, captain)
+    result = complete_event(session, event.id, admin)
 
     assert result["status"] == EventStatus.completed
-    # Seeded team has captain + 2 active members + former_player eligible; only former_player is going.
-    assert result["going_count"] == 1
-    assert result["reward_count"] == 1
-    assert coin_balance(session, team.id, captain, former_player.id) == 10
-    assert coin_balance(session, team.id, captain, late_joiner.id) == 0
-    assert coin_balance(session, team.id, captain, old_inactive_player.id) == 0
+    assert result["going_count"] == 0
+    assert result["reward_count"] == 0
+    assert coin_balance(session, team.id, admin, former_player.id) == 0
+    assert coin_balance(session, team.id, admin, late_joiner.id) == 0
+    assert coin_balance(session, team.id, admin, old_inactive_player.id) == 0
 
 
 def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
-    team, captain, player, missing_player = _seed_team(session)
+    team, admin, player, missing_player = _seed_team(session)
     now = datetime.now(UTC)
     for membership in session.scalars(select(TeamMembership).where(TeamMembership.team_id == team.id)):
         membership.joined_at = now - timedelta(days=30)
@@ -396,16 +402,18 @@ def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
         type=EventType.training,
         title="旧训练",
         start_time=now - timedelta(days=10),
+        end_time=now - timedelta(days=10) + timedelta(hours=2),
         status=EventStatus.completed,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     recent_event = Event(
         team_id=team.id,
         type=EventType.training,
         title="近期训练",
         start_time=now - timedelta(days=1),
+        end_time=now - timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.completed,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add_all([old_event, recent_event])
     session.flush()
@@ -431,7 +439,7 @@ def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
     )
     session.commit()
 
-    all_rows = signup_board(session, team.id, captain)
+    all_rows = signup_board(session, team.id, admin)
     player_row = next(row for row in all_rows if row["user_id"] == player.id)
     assert player_row["user"]["name"] == player.name
     assert player_row["user"]["email"] == player.email
@@ -440,7 +448,7 @@ def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
     assert player_row["total"] == 2
     assert player_row["going_rate"] == 0.5
 
-    recent_rows = signup_board(session, team.id, captain, starts_after=now - timedelta(days=2))
+    recent_rows = signup_board(session, team.id, admin, starts_after=now - timedelta(days=2))
     recent_player_row = next(row for row in recent_rows if row["user_id"] == player.id)
     assert recent_player_row["going"] == 1
     assert recent_player_row["not_going"] == 0
@@ -448,7 +456,7 @@ def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
 
 
 def test_signup_board_requires_current_team_membership(session: Session) -> None:
-    team, captain, player, _missing_player = _seed_team(session)
+    team, admin, player, _missing_player = _seed_team(session)
     other_org = Organization(name="Other Signup Org", slug=f"other-signup-{uuid4().hex[:8]}")
     session.add(other_org)
     session.flush()
@@ -458,7 +466,7 @@ def test_signup_board_requires_current_team_membership(session: Session) -> None
     session.add(
         TeamMembership(
             team_id=other_team.id,
-            user_id=captain.id,
+            user_id=admin.id,
             role=MembershipRole.admin,
             status=MembershipStatus.active,
         )
@@ -468,11 +476,11 @@ def test_signup_board_requires_current_team_membership(session: Session) -> None
     with pytest.raises(PermissionDeniedError):
         signup_board(session, other_team.id, player)
 
-    assert signup_board(session, team.id, captain) == []
+    assert signup_board(session, team.id, admin) == []
 
 
-def test_refunding_fulfilled_redemption_restores_stock_and_coin_balance(session: Session) -> None:
-    team, captain, player, _ = _seed_team(session)
+def test_refunding_fulfilled_redemption_preserves_stock_and_restores_coin_balance(session: Session) -> None:
+    team, admin, player, _ = _seed_team(session)
     session.add(
         CoinTransaction(
             team_id=team.id,
@@ -480,7 +488,7 @@ def test_refunding_fulfilled_redemption_restores_stock_and_coin_balance(session:
             amount=50,
             type=CoinTransactionType.admin_adjustment,
             reason="Seed balance",
-            created_by=captain.id,
+            created_by=admin.id,
         )
     )
     item = StoreItem(
@@ -489,7 +497,7 @@ def test_refunding_fulfilled_redemption_restores_stock_and_coin_balance(session:
         price=15,
         stock=2,
         is_active=True,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add(item)
     session.commit()
@@ -500,12 +508,14 @@ def test_refunding_fulfilled_redemption_restores_stock_and_coin_balance(session:
         player,
         RedemptionCreateRequest(id=uuid4(), store_item_id=item.id, quantity=1),
     )
-    assert coin_balance(session, team.id, captain, player.id) == 35
+    assert coin_balance(session, team.id, admin, player.id) == 35
     assert session.get(StoreItem, item.id).stock == 1
 
-    fulfill_redemption(session, redemption.id, captain)
-    refunded = refund_redemption(session, redemption.id, captain)
+    fulfill_redemption(session, redemption.id, admin)
+    refunded = refund_redemption(session, redemption.id, admin)
 
     assert refunded.status == "refunded"
-    assert coin_balance(session, team.id, captain, player.id) == 50
-    assert session.get(StoreItem, item.id).stock == 2
+    assert coin_balance(session, team.id, admin, player.id) == 50
+    assert session.get(StoreItem, item.id).stock == 1
+    assert refunded.refunded_by == admin.id
+    assert refunded.refunded_at is not None

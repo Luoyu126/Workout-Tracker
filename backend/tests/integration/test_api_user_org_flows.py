@@ -150,9 +150,9 @@ def test_organizations_router_lists_only_active_membership_active_team_orgs(sess
 
 def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Session) -> None:
     user = User(auth_id=uuid4(), name="首页用户", email="home-user@example.com")
-    captain = User(auth_id=uuid4(), name="首页队长", email="home-captain@example.com")
+    admin = User(auth_id=uuid4(), name="首页队长", email="home-admin@example.com")
     organization = Organization(name="Home Org", slug=f"home-org-{uuid4().hex[:8]}")
-    session.add_all([user, captain, organization])
+    session.add_all([user, admin, organization])
     session.flush()
 
     team = Team(organization_id=organization.id, name="Home Team")
@@ -168,8 +168,8 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
             ),
             TeamMembership(
                 team_id=team.id,
-                user_id=captain.id,
-                role=MembershipRole.captain,
+                user_id=admin.id,
+                role=MembershipRole.admin,
                 status=MembershipStatus.active,
             ),
         ]
@@ -182,16 +182,18 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
         type=EventType.training,
         title="明天训练",
         start_time=now + timedelta(days=1),
+        end_time=now + timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     completed = Event(
         team_id=team.id,
         type=EventType.training,
         title="昨天训练",
         start_time=now - timedelta(days=1),
+        end_time=now - timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.completed,
-        created_by=captain.id,
+        created_by=admin.id,
     )
     session.add_all([upcoming, completed])
     session.flush()
@@ -204,7 +206,7 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
             ),
             EventSignup(
                 event_id=completed.id,
-                user_id=captain.id,
+                user_id=admin.id,
                 status=SignupStatus.maybe,
             ),
             CoinTransaction(
@@ -213,15 +215,15 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
                 amount=15,
                 type=CoinTransactionType.admin_adjustment,
                 reason="Seed user balance",
-                created_by=captain.id,
+                created_by=admin.id,
             ),
             CoinTransaction(
                 team_id=team.id,
-                user_id=captain.id,
+                user_id=admin.id,
                 amount=20,
                 type=CoinTransactionType.admin_adjustment,
-                reason="Seed captain balance",
-                created_by=captain.id,
+                reason="Seed admin balance",
+                created_by=admin.id,
             ),
         ]
     )
@@ -235,8 +237,8 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
     assert [event["title"] for event in home["upcoming_events"]] == ["明天训练"]
     assert home["signup_summary"] == {
         "going": 1,
-        "maybe": 1,
+        "maybe": 0,
         "not_going": 0,
-        "total": 2,
+        "total": 1,
     }
     assert home["coin_summary"] == {"balance": 15, "team_ledger_total": 35}

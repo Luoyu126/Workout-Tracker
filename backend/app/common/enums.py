@@ -20,7 +20,6 @@ class TeamStatus(StrEnum):
 
 class MembershipRole(StrEnum):
     member = "member"
-    captain = "captain"
     admin = "admin"
 
 
@@ -37,10 +36,8 @@ class EventType(StrEnum):
 
 
 class EventStatus(StrEnum):
-    draft = "draft"
     published = "published"
     completed = "completed"
-    cancelled = "cancelled"
 
 
 class SignupStatus(StrEnum):
@@ -85,8 +82,6 @@ class RedemptionStatus(StrEnum):
 
 class NotificationType(StrEnum):
     new_event = "new_event"
-    event_updated = "event_updated"
-    event_deleted = "event_deleted"
     coin_earned = "coin_earned"
     redemption_completed = "redemption_completed"
     team_announcement = "team_announcement"

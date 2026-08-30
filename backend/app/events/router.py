@@ -30,7 +30,6 @@ from app.events.service import (
     get_my_signup,
     list_events,
     list_signups,
-    publish_event,
     update_event,
     upsert_my_signup,
 )
@@ -131,19 +130,6 @@ def patch_event(
 ) -> dict[str, object]:
     try:
         event = update_event(session, event_id, user, payload)
-        return get_event_detail(session, event.id, user)
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
-
-
-@router.post("/events/{event_id}/publish", response_model=EventRead)
-def post_publish_event(
-    event_id: UUID,
-    user: User = Depends(current_user),
-    session: Session = Depends(get_db),
-) -> dict[str, object]:
-    try:
-        event = publish_event(session, event_id, user)
         return get_event_detail(session, event.id, user)
     except Exception as exc:
         raise _to_http_error(exc) from exc

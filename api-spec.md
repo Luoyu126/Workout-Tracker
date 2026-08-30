@@ -98,9 +98,10 @@ MVP 使用 FastAPI 标准错误响应，业务错误在 `detail` 中返回结构
 
 User 不保存全局业务角色。球队权限来自有效的 TeamMembership：
 
-- member：读取球队内容、维护自己的报名、只读查看比赛实时看板、兑换商品。
-- captain：包含 member 权限，并可管理活动、完成活动结算、比赛实时记录、金币规则、商品和兑换履约。
-- admin：包含 captain 权限，并可管理当前球队、成员和球队内角色。
+- member：队员账号，读取球队内容、维护自己的报名、只读查看比赛实时看板、兑换商品。
+- admin：球队管理员账号，管理当前球队、成员、活动、完成活动结算、比赛实时记录、金币规则、商品和兑换履约。
+
+`admin` 和 `member` 是分立的业务账号逻辑。只有 `member` 可以报名训练/比赛、进入报名榜统计并获得活动报名奖励；`admin` 账号不能报名、不能被统计，也不能获得活动报名奖励。真实球队队长如需参与训练/比赛，应使用 `member` 逻辑。
 
 所有 team_id、event_id、store_item_id 等资源都必须沿关系校验所属球队，禁止仅凭客户端传入的 team_id 授权。
 
@@ -150,7 +151,7 @@ created_at
 updated_at
 ~~~
 
-队长列表和成员数由 TeamMembership 聚合，不保存为 Team 字段。
+成员数由 TeamMembership 聚合，不保存为 Team 字段。
 
 ### 5.4 TeamMembership
 
@@ -158,11 +159,11 @@ updated_at
 id
 team_id
 user_id
-role                # member | captain | admin
+role                # member | admin
 jersey_number
-position
+player_name
 status              # active | inactive | pending
-joined_at
+joined_at           # nullable
 left_at
 created_at
 updated_at
@@ -181,14 +182,13 @@ description
 location
 start_time
 end_time
-signup_deadline
-status              # draft | published | completed | cancelled
+status              # published | completed
 created_by
 created_at
 updated_at
 ~~~
 
-若提供 end_time，必须晚于 start_time；若提供 signup_deadline，不得晚于 start_time。创建和更新活动时，后端都会校验最终时间关系。
+end_time 必填且必须晚于 start_time。活动创建后立即为 published。
 
 ### 5.6 EventSignup
 
@@ -258,6 +258,8 @@ created_at
 updated_at
 ~~~
 
+amount 必须大于或等于 0。每个球队最多有一条 active `training_signup` 规则和一条 active `match_signup` 规则；inactive 历史规则不受此限制。
+
 ### 5.10 CoinTransaction
 
 ~~~text
@@ -308,6 +310,10 @@ total_price
 status              # pending | fulfilled | cancelled | refunded
 fulfilled_by
 fulfilled_at
+cancelled_by
+cancelled_at
+refunded_by
+refunded_at
 created_at
 updated_at
 ~~~
@@ -320,13 +326,14 @@ updated_at
 id
 user_id
 team_id
-type                # new_event | event_updated | event_deleted | coin_earned | redemption_completed | team_announcement
+type                # new_event | coin_earned | redemption_completed | team_announcement
 title
 body
 reference_type
 reference_id
 read_at
 created_at
+updated_at
 expires_at
 ~~~
 
@@ -415,8 +422,8 @@ GET /api/v1/teams/{team_id}/home
 
 返回 Team 基础字段以及派生数据：
 
-- current_membership：当前用户在该球队的 active TeamMembership，用于前端判断 captain/admin UI 能力。
-- captains：active captain 成员列表。
+- current_membership：当前用户在该球队的 active TeamMembership，用于前端判断 member/admin UI 能力。
+- admins：active admin 成员列表。
 - member_count：active 成员数量。
 - upcoming_events：近期 published 活动。
 - signup_summary：已完成活动上 EventSignup 的聚合，形如 `{going, maybe, not_going, total}`。
@@ -432,7 +439,7 @@ GET /api/v1/teams/{team_id}
 
 PATCH /api/v1/teams/{team_id}
 
-captain 可更新 name、description、logo_url；admin 还可更新 status。
+仅 admin 可更新 name、description、logo_url 和 status。
 
 ### 7.7 成员列表
 
@@ -455,14 +462,14 @@ GET /api/v1/teams/{team_id}/member-candidates
 
 POST /api/v1/teams/{team_id}/members
 
-仅 admin 可用。`TeamMembership` 以 `(team_id, user_id)` 唯一。重复提交同一用户且 role、jersey_number、position、status 完全一致时，后端幂等返回已有 TeamMembership；同一用户被不同成员内容重复添加时返回 409。
+仅 admin 可用。`TeamMembership` 以 `(team_id, user_id)` 唯一。重复提交同一用户且 role、jersey_number、player_name、status 完全一致时，后端幂等返回已有 TeamMembership；同一用户被不同成员内容重复添加时返回 409。
 
 ~~~json
 {
   "user_id": "6cab8c51-8697-4cb8-b956-27dfaf365b63",
   "role": "member",
   "jersey_number": "10",
-  "position": "midfielder",
+  "player_name": "Alex",
   "status": "active"
 }
 ~~~
@@ -477,7 +484,7 @@ GET /api/v1/teams/{team_id}/members/{user_id}
 
 PATCH /api/v1/teams/{team_id}/members/{user_id}
 
-admin 可更新 role、status、jersey_number、position 和 left_at。更新后仍必须保证球队至少有一个 active admin。
+admin 可更新 role、status、jersey_number、player_name 和 left_at。更新后仍必须保证球队至少有一个 active admin。
 
 ## 8. 活动 API
 
@@ -485,7 +492,7 @@ admin 可更新 role、status、jersey_number、position 和 left_at。更新后
 
 POST /api/v1/teams/{team_id}/events
 
-captain 或 admin 可用。客户端应生成 UUID `id` 并随请求提交。创建后状态固定为 draft，created_by 取当前用户。创建成功后为球队 active 成员创建 new_event Notification，通知内容保存活动标题和开始时间快照；但该通知使用 reference_type=event_snapshot 且 reference_id=null，避免普通队员通过通知打开仍不可见的 draft。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 Event，不重复创建活动或通知；相同 `id` 被不同请求复用时返回 409。type=match 必须使用创建比赛接口。
+仅 admin 可用。客户端可生成 UUID `id` 并随请求提交。创建后状态固定为 published，created_by 取当前用户。创建成功后仅为当时已加入且仍 active 的 role=member 队员创建一条以活动为引用的 new_event Notification；不通知 admin、已离队或尚未入队的用户。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 Event，不重复创建活动或通知；相同 `id` 被不同请求复用时返回 409。type=match 必须使用创建比赛接口。
 
 ~~~json
 {
@@ -495,8 +502,7 @@ captain 或 admin 可用。客户端应生成 UUID `id` 并随请求提交。创
   "description": "Ball control",
   "location": "Main Field",
   "start_time": "2026-08-18T22:00:00Z",
-  "end_time": "2026-08-19T00:00:00Z",
-  "signup_deadline": "2026-08-18T16:00:00Z"
+  "end_time": "2026-08-19T00:00:00Z"
 }
 ~~~
 
@@ -504,7 +510,7 @@ captain 或 admin 可用。客户端应生成 UUID `id` 并随请求提交。创
 
 POST /api/v1/teams/{team_id}/matches
 
-在同一事务中创建 Event(type=match, status=draft) 和 MatchDetails。客户端应在嵌套 `event` 中生成 UUID `id`。创建成功后为球队 active 成员创建 new_event Notification，通知内容保存比赛标题和开始时间快照；但该通知使用 reference_type=event_snapshot 且 reference_id=null，避免普通队员通过通知打开仍不可见的 draft。重复提交相同 `event.id` 且 team、created_by、event payload 和 match_details 完全一致时，后端幂等返回已有 Event，不重复创建 MatchDetails 或通知；相同 `event.id` 被不同请求复用时返回 409。
+在同一事务中创建 Event(type=match, status=published) 和 MatchDetails。通知资格和幂等规则与创建普通活动一致。客户端可在嵌套 `event` 中生成 UUID `id`；相同 `event.id` 被不同请求复用时返回 409。
 
 ~~~json
 {
@@ -514,8 +520,7 @@ POST /api/v1/teams/{team_id}/matches
     "description": null,
     "location": "Main Field",
     "start_time": "2026-08-22T18:00:00Z",
-    "end_time": "2026-08-22T20:00:00Z",
-    "signup_deadline": "2026-08-21T18:00:00Z"
+    "end_time": "2026-08-22T20:00:00Z"
   },
   "match_details": {
     "opponent": "North FC",
@@ -533,11 +538,11 @@ GET /api/v1/teams/{team_id}/events
 过滤参数：
 
 - type：training | match | other
-- status：draft | published | completed | cancelled
+- status：published | completed
 - starts_after
 - starts_before
 
-member 不可查看 draft；captain 和 admin 可以。
+active 球队成员可查看 published 和 completed 活动。
 
 ### 8.4 活动详情
 
@@ -549,27 +554,19 @@ match 响应附带 match_details。
 
 PATCH /api/v1/events/{event_id}
 
-captain 或 admin 可用。仅 draft 或 published 可更新；completed 不可修改。type 创建后不可修改。比赛详情通过同一请求的 match_details 对象更新。更新 published 活动且实际字段发生变化后，为球队 active 成员创建 event_updated Notification；重复提交与当前状态完全一致的更新请求必须幂等返回当前 Event，不重复通知。
+仅 admin 可用。仅 published 可更新；completed 不可修改。type 创建后不可修改。比赛详情通过同一请求的 match_details 对象更新。更新活动时原有 new_event Notification 原地更新标题、内容和 updated_at，不创建其他通知类型；重复提交与当前状态完全一致的更新请求幂等返回当前 Event。
 
-### 8.6 发布活动
-
-POST /api/v1/events/{event_id}/publish
-
-仅允许 draft → published。发布比赛前必须存在有效 MatchDetails 和 opponent。重复发布已 published 的活动必须幂等返回当前 Event，不得重复创建 new_event Notification。
-
-成功后为球队 active 成员创建 new_event Notification，reference_type=event，reference_id=活动 id，可从通知打开活动详情。draft 修改不通知。
-
-### 8.7 删除活动
+### 8.6 删除活动
 
 DELETE /api/v1/events/{event_id}
 
-captain 或 admin 可用。仅 draft 或 published 可删除；completed 不可删除。删除前后端锁定 Event 行，再决定是否通知和物理删除，避免并发删除/通知竞态。删除是物理删除 Event 以及 EventSignup、MatchDetails、MatchLogEntry 等从属记录。删除 published 活动前，后端先为球队 active 成员创建 event_deleted Notification，通知内容必须保存活动标题和时间快照，不依赖删除后的 Event 外键。
+仅 admin 可用。仅 published 可删除；completed 不可删除。删除前后端锁定 Event 行，删除对应的 new_event Notification，再物理删除 Event 以及 EventSignup、MatchDetails、MatchLogEntry 等从属记录。
 
-### 8.8 完成活动
+### 8.7 完成活动
 
 POST /api/v1/events/{event_id}/complete
 
-captain 或 admin 可用。仅允许 published → completed。比赛活动的请求可包含最终比赛数据；训练或其他活动不得提交 match_details。
+仅 admin 可用。仅允许 published → completed。比赛活动的请求可包含最终比赛数据；训练或其他活动不得提交 match_details。
 
 ~~~json
 {
@@ -582,9 +579,9 @@ captain 或 admin 可用。仅允许 published → completed。比赛活动的�
 }
 ~~~
 
-完成动作在一个事务中锁定 Event，按活动开始时有资格参与的成员范围结算报名奖励，再更新 Event.status。有效成员范围按历史成员资格判断：`joined_at <= event.start_time`，且当前仍为 active 或 `left_at >= event.start_time`。无报名记录的成员按 `maybe` 处理；不自动创建 absent 或其他出勤记录。
+完成动作在一个事务中锁定 Event，按活动开始时有资格参与的队员范围结算报名奖励，再更新 Event.status。有效队员必须是当前 active 的 `role=member`，且 `joined_at <= event.start_time`。无报名记录的队员按 `maybe` 处理；不自动创建 absent 或其他出勤记录。
 
-对每位有效成员，若其报名状态为 `going`，则按球队有效 CoinRule（训练用 `training_signup`，比赛用 `match_signup`）生成缺失的 `signup_reward` CoinTransaction 和 `coin_earned` Notification。`maybe` / `not_going` 不发币。
+对每位有效队员，若其报名状态为 `going`，则按球队有效 CoinRule（训练用 `training_signup`，比赛用 `match_signup`）生成缺失的 `signup_reward` CoinTransaction 和 `coin_earned` Notification。`maybe` / `not_going` 不发币；admin 不参与结算。
 
 响应直接返回完成结果对象：
 
@@ -597,7 +594,7 @@ captain 或 admin 可用。仅允许 published → completed。比赛活动的�
 }
 ~~~
 
-- `going_count`：有效成员中报名状态为 `going` 的人数。
+- `going_count`：有效队员中报名状态为 `going` 的人数。
 - `reward_count`：本次新写入的 `signup_reward` 流水条数。
 
 重复调用已 completed 的活动时返回现有结果（`reward_count` 为 0），不重复发币。
@@ -609,7 +606,7 @@ captain 或 admin 可用。仅允许 published → completed。比赛活动的�
 GET /api/v1/events/{event_id}/signup
 
 若尚未创建记录，返回派生默认状态 maybe，但不强制插入数据库。
-该接口遵守活动可见性：普通 member 不可通过 draft 活动 ID 读取报名状态。
+仅 active 的 role=member 可读取自己的报名状态。
 响应包含 `user` 摘要，移动端可直接展示姓名/邮箱。
 
 ### 9.2 新建或修改报名
@@ -625,9 +622,9 @@ PUT /api/v1/events/{event_id}/signup
 
 规则：
 
-- 仅 active 球队成员可操作自己的报名。
+- 仅 active 且 role=member 的球队成员可操作自己的报名；admin 不可报名。
 - 活动必须为 published。
-- 当前时间不得超过有效报名截止时间；若 signup_deadline 为空，则以活动 start_time 作为截止时间。
+- 当前时间不得超过活动 start_time。
 - not_going 必须有非空 note。
 - 使用 (event_id, user_id) 唯一约束做 upsert。
 
@@ -635,8 +632,8 @@ PUT /api/v1/events/{event_id}/signup
 
 GET /api/v1/events/{event_id}/signups
 
-captain 或 admin 可用，支持 status 过滤。
-响应中每条 EventSignup 包含 `user` 摘要，供队长按姓名查看报名成员。
+仅 admin 可用，支持 status 过滤。
+响应中每条 EventSignup 包含 `user` 摘要，供管理员按姓名查看报名成员。
 
 ## 10. 报名榜 API
 
@@ -644,7 +641,7 @@ captain 或 admin 可用，支持 status 过滤。
 
 GET /api/v1/teams/{team_id}/signup-board
 
-仅统计 completed 活动，支持 starts_after、starts_before 参数。按活动开始时有资格参与的成员聚合每位成员的 `going` / `maybe` / `not_going` 次数、`total` 与 `going_rate`，并附带每名成员的 `user` 摘要用于移动端排行榜展示。无报名记录按 `maybe` 计入。
+仅统计 completed 活动，支持 starts_after、starts_before 参数。按活动开始时有资格参与的 role=member 队员聚合每位队员的 `going` / `maybe` / `not_going` 次数、`total` 与 `going_rate`，并附带每名队员的 `user` 摘要用于移动端排行榜展示。admin 不进入排行榜；无报名记录按 `maybe` 计入。
 
 ## 11. 比赛 API
 
@@ -652,7 +649,7 @@ GET /api/v1/teams/{team_id}/signup-board
 
 POST /api/v1/events/{event_id}/match-logs
 
-仅 captain 或 admin 可用。Event 必须为 type=match、status=published。普通 member 可以读取实时看板，但不能新增比赛实时记录。
+仅 admin 可用。Event 必须为 type=match、status=published。普通 member 可以读取实时看板，但不能新增比赛实时记录。
 
 客户端应为每条实时记录生成 UUID `id` 并随请求提交。重复提交相同 `id` 且 payload 完全一致时，后端必须幂等返回已有 MatchLogEntry；相同 `id` 但 event、创建人或 payload 不一致时返回 409，避免现场网络重试造成重复进球/牌罚/换人记录。
 
@@ -689,27 +686,27 @@ minute 必须为非负整数。进球和牌罚要求 player_name、player_number
 GET /api/v1/events/{event_id}/match-logs
 
 按 minute、created_at、id 稳定排序，支持 after 游标用于短轮询增量获取。
-该接口遵守活动可见性：draft match 仅 captain/admin 可读取，普通 member 不可通过 event_id 读取。
+active 球队成员均可读取 published 或 completed match 的实时记录。
 
 ### 11.3 删除实时记录
 
 DELETE /api/v1/match-logs/{log_id}
 
-仅 captain 或 admin 可用，且活动必须仍为 published。completed 或 cancelled 后记录只读。
+仅 admin 可用，且活动必须仍为 published。completed 后记录只读。
 
 ### 11.4 实时看板
 
 GET /api/v1/events/{event_id}/live-board
 
 返回 Event、MatchDetails、按时间排序的 MatchLogEntry 以及由记录派生的事件计数。
-该接口遵守活动可见性：draft match 仅 captain/admin 可读取。
+active 球队成员可读取。
 
 ### 11.5 比赛汇总
 
 GET /api/v1/events/{event_id}/summary
 
 仅适用于 match，返回比分、结果、四类记录统计、本场 `signups` 列表以及本活动 `signup_reward` 流水。
-该接口遵守活动可见性：draft match 仅 captain/admin 可读取。
+active 球队成员可读取。
 
 ## 12. 金币 API
 
@@ -729,7 +726,7 @@ GET /api/v1/teams/{team_id}/coins/transactions
 
 GET /api/v1/teams/{team_id}/members/{user_id}/coin-transactions
 
-captain 或 admin 可用。
+仅 admin 可用。
 
 ### 12.4 金币规则列表
 
@@ -739,7 +736,7 @@ GET /api/v1/teams/{team_id}/coin-rules
 
 POST /api/v1/teams/{team_id}/coin-rules
 
-captain 或 admin 可用。客户端应生成 CoinRule UUID `id` 并随请求提交。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 CoinRule；相同 `id` 被不同规则内容复用时返回 409，避免网络重试重复创建训练/比赛报名奖励规则。
+仅 admin 可用。amount 必须非负。同一球队不能创建第二条相同 trigger_type 的 active 训练或比赛报名规则；冲突返回稳定的 409 `COIN_RULE_CONFLICT`。客户端可生成 CoinRule UUID `id`，相同请求重试幂等返回。
 
 ~~~json
 {
@@ -756,7 +753,7 @@ captain 或 admin 可用。客户端应生成 CoinRule UUID `id` 并随请求提
 
 PATCH /api/v1/coin-rules/{coin_rule_id}
 
-captain 或 admin 可用。
+仅 admin 可用。
 
 ### 12.7 手工金币调整
 
@@ -785,7 +782,7 @@ CoinTransaction；任一字段不同必须返回 409 冲突，避免复用 id �
 
 GET /api/v1/teams/{team_id}/store-items
 
-member 只能看到 is_active=true 商品；即使显式传 is_active=false 也不会返回下架商品。captain 和 admin 可通过 is_active 参数筛选上架或下架商品，不传时查看全部。
+member 只能看到 is_active=true 商品；即使显式传 is_active=false 也不会返回下架商品。admin 可通过 is_active 参数筛选上架或下架商品，不传时查看全部。
 
 ### 13.2 商品详情
 
@@ -795,7 +792,7 @@ GET /api/v1/store-items/{store_item_id}
 
 POST /api/v1/teams/{team_id}/store-items
 
-captain 或 admin 可用。客户端应生成 StoreItem UUID `id` 并随请求提交。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 StoreItem；相同 `id` 被不同请求复用时返回 409，避免网络重试重复上架同一商品。
+仅 admin 可用。客户端应生成 StoreItem UUID `id` 并随请求提交。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 StoreItem；相同 `id` 被不同请求复用时返回 409，避免网络重试重复上架同一商品。
 
 ~~~json
 {
@@ -815,13 +812,13 @@ price 必须大于 0；stock 为 null 或非负整数。
 
 PATCH /api/v1/store-items/{store_item_id}
 
-captain 或 admin 可用。
+仅 admin 可用。
 
 ### 13.5 创建兑换
 
 POST /api/v1/teams/{team_id}/redemptions
 
-客户端生成 Redemption UUID；网络重试复用同一个 id。
+仅 active 的 role=member 可用；admin 不可创建兑换。客户端生成 Redemption UUID；网络重试复用同一个 id。
 
 ~~~json
 {
@@ -856,7 +853,7 @@ GET /api/v1/teams/{team_id}/redemptions
 
 GET /api/v1/teams/{team_id}/redemptions/manage
 
-captain 或 admin 可用。响应中每条 Redemption 包含 `user` 摘要，供管理端显示兑换人姓名/邮箱。
+仅 admin 可用。响应中每条 Redemption 包含 `user` 摘要，供管理端显示兑换人姓名/邮箱。
 
 ### 13.8 完成履约
 
@@ -868,13 +865,13 @@ POST /api/v1/redemptions/{redemption_id}/fulfill
 
 POST /api/v1/redemptions/{redemption_id}/cancel
 
-仅允许 pending → cancelled。在同一事务中创建正数 refund CoinTransaction 并恢复有限库存。重复取消已 cancelled 的兑换单必须幂等返回当前 Redemption，不得创建第二笔 refund 或重复恢复库存。
+仅允许 pending → cancelled。在同一事务中创建正数 refund CoinTransaction、恢复有限库存，并填写 cancelled_by、cancelled_at。重复取消已 cancelled 的兑换单必须幂等返回当前 Redemption，不得创建第二笔 refund 或重复恢复库存。
 
 ### 13.10 退款已履约兑换
 
 POST /api/v1/redemptions/{redemption_id}/refund
 
-仅允许 fulfilled → refunded。在同一事务中创建正数 refund CoinTransaction，并恢复有限库存。重复退款已 refunded 的兑换单必须幂等返回当前 Redemption，不得创建第二笔 refund 或重复恢复库存。
+仅允许 fulfilled → refunded。在同一事务中创建正数 refund CoinTransaction，并填写 refunded_by、refunded_at；已履约商品不恢复库存。重复退款已 refunded 的兑换单必须幂等返回当前 Redemption，不得创建第二笔 refund。
 
 对非对应终态的跨状态错误操作仍返回冲突，例如 fulfilled 不能取消，pending 不能退款，cancelled 不能退款。
 
@@ -890,7 +887,7 @@ GET /api/v1/notifications
 
 POST /api/v1/notifications/{notification_id}/read
 
-后端写入 read_at；重复调用返回现有结果。
+后端写入 read_at 并更新 updated_at；重复调用返回现有结果。
 
 ### 14.3 未读数
 
@@ -902,7 +899,7 @@ GET /api/v1/notifications/unread-count
 
 POST /api/v1/teams/{team_id}/announcements
 
-captain 或 admin 可用。客户端应生成公告 UUID `id` 并随请求提交。创建后立即为当前球队 active 成员创建 `team_announcement` Notification，`reference_type=team_announcement`，`reference_id=id`。重复提交相同 `id` 且 title/body 完全一致时，后端幂等返回已有通知，不重复创建 Inbox 或 Push；相同 `id` 被不同公告内容复用时返回 409。
+仅 admin 可用。客户端应生成公告 UUID `id` 并随请求提交。创建后立即为当前球队 active member 创建 `team_announcement` Notification，`reference_type=team_announcement`，`reference_id=id`。重复提交相同 `id` 且 title/body 完全一致时，后端幂等返回已有通知，不重复创建 Inbox 或 Push；相同 `id` 被不同公告内容复用时返回 409。
 
 请求：
 
@@ -940,15 +937,12 @@ DELETE /api/v1/device-tokens/{device_token_id}
 ### 15.1 Event
 
 ~~~text
-draft → published → completed
-
-draft/published → hard delete
+published → completed
+published → hard delete
 ~~~
 
-- draft 仅 captain/admin 可见和编辑；删除 draft 不通知。
-- published 可报名；重复发布必须幂等返回，不重复发送发布通知；captain/admin 可在 published match 新增或删除实时记录，member 只能只读查看实时看板；实际修改 published 后通知队员，重复提交相同更新不重复通知；删除 published 先通知再物理删除。
+- published 创建后立即可由 member 报名；admin 可在 published match 新增或删除实时记录，member 只能只读查看实时看板；修改活动原地更新 new_event 通知，删除活动时删除该通知。
 - completed 的报名、比赛记录和活动安排只读；不可修改或删除活动；完成时按报名 `going` 结算 `signup_reward`，不提供赛后出勤修正接口。
-- cancelled 保留为数据库枚举值，但 MVP 的活动删除不使用 cancelled 状态。
 
 ### 15.2 Redemption
 
@@ -961,14 +955,17 @@ pending → fulfilled → refunded
 - pending 创建时已经扣币并预留库存。
 - fulfilled 重复履约必须幂等返回，不重复发送履约通知。
 - cancelled 必须以补偿性 refund 流水返币并恢复库存；重复取消幂等返回，不重复补偿。
-- refunded 必须以补偿性 refund 流水返币并恢复有限库存，不编辑原 redemption 流水；重复退款幂等返回，不重复补偿。
+- refunded 必须以补偿性 refund 流水返币，但不恢复已履约商品库存；不编辑原 redemption 流水；重复退款幂等返回，不重复补偿。
 
 ## 16. 数据一致性约束
 
 - 所有写接口必须重新校验 active TeamMembership 和资源所属球队。
 - EventSignup 是活动参与意愿与完成结算的权威依据；MVP 不再维护独立 Attendance 实体或出勤 API。
+- 只有 role=member 的用户可以报名、进入报名榜统计和获得活动报名奖励；role=admin 的用户不参与这些队员流程。
 - CoinTransaction 只追加，不提供通用修改或删除接口。
 - signup_reward 对同一球队、用户和活动只能存在一次。
+- redemption 扣币对同一球队、用户和非空兑换引用只能存在一次。
+- Notification 的非空 `(user_id, type, reference_id)` 引用唯一；reference_id 为空的通知可重复。
 - MatchDetails 只能属于 match Event，且 event_id 唯一。
 - 兑换使用客户端生成的 Redemption.id 实现安全重试。
 - 余额、库存、订单和退款相关写入必须使用 PostgreSQL 事务和行锁。

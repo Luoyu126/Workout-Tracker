@@ -149,7 +149,7 @@ def test_team_router_enforces_current_team_admin_scope_and_last_admin_guard(
     with pytest.raises(HTTPException) as duplicate_mismatch_exc:
         post_member(
             team_a.id,
-            MembershipCreateRequest(user_id=new_player.id, role=MembershipRole.captain),
+            MembershipCreateRequest(user_id=new_player.id, role=MembershipRole.admin),
             team_a_admin,
             session,
         )
@@ -160,11 +160,11 @@ def test_team_router_enforces_current_team_admin_scope_and_last_admin_guard(
     promoted = patch_member(
         team_a.id,
         new_player.id,
-        MembershipUpdateRequest(role=MembershipRole.captain),
+        MembershipUpdateRequest(role=MembershipRole.admin),
         team_a_admin,
         session,
     )
-    assert promoted.role == MembershipRole.captain
+    assert promoted.role == MembershipRole.admin
 
     inactive_member = patch_member(
         team_a.id,
@@ -197,12 +197,21 @@ def test_team_router_enforces_current_team_admin_scope_and_last_admin_guard(
     assert manually_inactivated_member.status == MembershipStatus.inactive
     assert manually_inactivated_member.left_at == manual_left_at.replace(tzinfo=None)
 
+    demoted_admin = patch_member(
+        team_a.id,
+        team_a_admin.id,
+        MembershipUpdateRequest(role=MembershipRole.member),
+        team_a_admin,
+        session,
+    )
+    assert demoted_admin.role == MembershipRole.member
+
     with pytest.raises(HTTPException) as last_admin_exc:
         patch_member(
             team_a.id,
-            team_a_admin.id,
+            new_player.id,
             MembershipUpdateRequest(role=MembershipRole.member),
-            team_a_admin,
+            new_player,
             session,
         )
     assert last_admin_exc.value.status_code == 409
@@ -211,16 +220,16 @@ def test_team_router_enforces_current_team_admin_scope_and_last_admin_guard(
     with pytest.raises(HTTPException) as inactive_last_admin_exc:
         patch_member(
             team_a.id,
-            team_a_admin.id,
+            new_player.id,
             MembershipUpdateRequest(status=MembershipStatus.inactive),
-            team_a_admin,
+            new_player,
             session,
         )
     assert inactive_last_admin_exc.value.status_code == 409
     assert inactive_last_admin_exc.value.detail["code"] == "LAST_ADMIN_REQUIRED"
 
     active_admins = read_members(team_a.id, MembershipRole.admin, MembershipStatus.active, team_a_admin, session)
-    assert [membership.user_id for membership in active_admins] == [team_a_admin.id]
+    assert [membership.user_id for membership in active_admins] == [new_player.id]
 
 
 def test_team_read_endpoint_requires_active_membership_and_active_team(session: Session) -> None:
@@ -395,7 +404,7 @@ def test_coin_rule_creation_is_idempotent_by_client_rule_id(session: Session) ->
         name="幂等训练奖励",
         trigger_type=CoinRuleTrigger.training_signup,
         amount=10,
-        config={"source": "captain-setting"},
+        config={"source": "admin-setting"},
         is_active=True,
     )
 
@@ -413,7 +422,7 @@ def test_coin_rule_creation_is_idempotent_by_client_rule_id(session: Session) ->
                 name="幂等训练奖励",
                 trigger_type=CoinRuleTrigger.training_signup,
                 amount=12,
-                config={"source": "captain-setting"},
+                config={"source": "admin-setting"},
                 is_active=True,
             ),
             team_a_admin,
@@ -422,6 +431,58 @@ def test_coin_rule_creation_is_idempotent_by_client_rule_id(session: Session) ->
     assert mismatch_exc.value.status_code == 409
     assert mismatch_exc.value.detail["code"] == "COIN_RULE_CONFLICT"
     assert session.get(CoinRule, rule_id).amount == 10
+
+
+def test_active_signup_coin_rules_are_unique_but_inactive_history_is_allowed(
+    session: Session,
+) -> None:
+    team, _, admin, _, _, _ = _seed_two_teams(session)
+    active = post_coin_rule(
+        team.id,
+        CoinRuleCreateRequest(
+            name="当前训练奖励",
+            trigger_type=CoinRuleTrigger.training_signup,
+            amount=10,
+        ),
+        admin,
+        session,
+    )
+
+    with pytest.raises(HTTPException) as duplicate_error:
+        post_coin_rule(
+            team.id,
+            CoinRuleCreateRequest(
+                name="重复训练奖励",
+                trigger_type=CoinRuleTrigger.training_signup,
+                amount=12,
+            ),
+            admin,
+            session,
+        )
+    assert duplicate_error.value.status_code == 409
+    assert duplicate_error.value.detail["code"] == "COIN_RULE_CONFLICT"
+
+    inactive = post_coin_rule(
+        team.id,
+        CoinRuleCreateRequest(
+            name="历史训练奖励",
+            trigger_type=CoinRuleTrigger.training_signup,
+            amount=8,
+            is_active=False,
+        ),
+        admin,
+        session,
+    )
+    assert inactive.is_active is False
+
+    patch_coin_rule(active.id, CoinRuleUpdateRequest(is_active=False), admin, session)
+    activated = patch_coin_rule(
+        inactive.id,
+        CoinRuleUpdateRequest(is_active=True),
+        admin,
+        session,
+    )
+    assert activated.is_active is True
 
 
 def test_admin_manual_coin_adjustment_is_idempotent_and_team_scoped(session: Session) -> None:
