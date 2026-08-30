@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         alias="EXPO_PUSH_ENDPOINT",
     )
     expo_push_timeout_seconds: float = Field(default=5.0, alias="EXPO_PUSH_TIMEOUT_SECONDS")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    log_dir: str = Field(default="backend/logs", alias="LOG_DIR")
+    log_max_bytes: int = Field(default=10_485_760, alias="LOG_MAX_BYTES")
+    log_backup_count: int = Field(default=5, alias="LOG_BACKUP_COUNT")
     cors_allowed_origins: str = Field(
         default="http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081,http://127.0.0.1:19006",
         alias="CORS_ALLOWED_ORIGINS",

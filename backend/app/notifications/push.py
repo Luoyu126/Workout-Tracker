@@ -5,13 +5,14 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import UUID
 
-from sqlalchemy import event, select
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import Session as OrmSession
 
 from app.common.enums import enum_value
 from app.config import Settings
 from app.models import DeviceToken, Notification
+from app.notifications import repository
 
 PENDING_EXPO_PUSH_MESSAGES_KEY = "pending_expo_push_messages"
 EXPO_PUSH_MESSAGE_BATCH_SIZE = 100
@@ -117,12 +118,7 @@ def enqueue_push_notifications(
         return PushDeliveryReport(attempted=0, delivered=0, skipped=len(notifications))
 
     user_ids = {notification.user_id for notification in notifications}
-    device_tokens = session.scalars(
-        select(DeviceToken).where(
-            DeviceToken.user_id.in_(user_ids),
-            DeviceToken.is_active.is_(True),
-        )
-    ).all()
+    device_tokens = repository.list_active_device_tokens(session, user_ids)
     active_push_user_ids = {device_token.user_id for device_token in device_tokens}
     messages = build_expo_push_messages(notifications, list(device_tokens))
 

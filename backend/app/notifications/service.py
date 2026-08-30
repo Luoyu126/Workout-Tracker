@@ -1,13 +1,21 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.common.enums import DevicePlatform, MembershipRole, MembershipStatus, NotificationType
+from app.common.enums import DevicePlatform, MembershipRole, NotificationType
+from app.common.transactions import transaction_boundary
 from app.config import get_settings
-from app.models import DeviceToken, Event, Notification, TeamMembership, User
+from app.models import DeviceToken, Event, Notification, User
+from app.notifications import repository
+from app.notifications.errors import (
+    DeviceTokenNotFoundError,
+    NotificationNotFoundError,
+    TeamAnnouncementConflictError,
+)
 from app.notifications.push import enqueue_push_notifications
+from app.teams import repository as team_repository
+from app.teams.eligibility import is_membership_active_member_at
 from app.teams.service import get_active_membership, require_team_role
 
 
@@ -21,6 +29,8 @@ def create_user_notification(
     reference_type: str | None = None,
     reference_id: UUID | None = None,
 ) -> Notification:
+    """Domain helper: add one notification to the caller-owned transaction."""
+
     notification = Notification(
         user_id=user_id,
         team_id=team_id,
@@ -30,8 +40,8 @@ def create_user_notification(
         reference_type=reference_type,
         reference_id=reference_id,
     )
-    session.add(notification)
-    session.flush()
+    repository.add(session, notification)
+    repository.flush(session)
     enqueue_push_notifications(session, [notification], get_settings())
     return notification
 
@@ -45,12 +55,8 @@ def create_team_notifications(
     reference_type: str | None = None,
     reference_id: UUID | None = None,
 ) -> list[Notification]:
-    user_ids = session.scalars(
-        select(TeamMembership.user_id).where(
-            TeamMembership.team_id == team_id,
-            TeamMembership.status == MembershipStatus.active,
-        )
-    ).all()
+    """Domain helper: add notifications without committing the caller's transaction."""
+
     notifications = [
         Notification(
             user_id=user_id,
@@ -61,10 +67,10 @@ def create_team_notifications(
             reference_type=reference_type,
             reference_id=reference_id,
         )
-        for user_id in user_ids
+        for user_id in team_repository.list_active_user_ids(session, team_id)
     ]
-    session.add_all(notifications)
-    session.flush()
+    repository.add_all(session, notifications)
+    repository.flush(session)
     enqueue_push_notifications(session, notifications, get_settings())
     return notifications
 
@@ -76,40 +82,25 @@ def _event_notification_content(event: Event) -> tuple[str, str]:
 
 
 def sync_event_notifications(session: Session, event: Event) -> list[Notification]:
-    """Create or update the single referenced new-event notification per eligible member."""
-    eligible_user_ids = set(
-        session.scalars(
-            select(TeamMembership.user_id).where(
-                TeamMembership.team_id == event.team_id,
-                TeamMembership.role == MembershipRole.member,
-                TeamMembership.status == MembershipStatus.active,
-                TeamMembership.joined_at.is_not(None),
-                TeamMembership.joined_at <= event.created_at,
-            )
-        ).all()
-    )
-    existing = list(
-        session.scalars(
-            select(Notification).where(
-                Notification.team_id == event.team_id,
-                Notification.type == NotificationType.new_event,
-                Notification.reference_id == event.id,
-            )
-        )
-    )
+    """Domain helper: synchronize eligible recipients without committing."""
+
+    eligible_user_ids = {
+        membership.user_id
+        for membership in team_repository.list_member_memberships(session, event.team_id)
+        if is_membership_active_member_at(membership, event.created_at)
+    }
+    existing = repository.list_event_notifications(session, event.team_id, event.id)
     existing_by_user_id = {notification.user_id: notification for notification in existing}
     title, body = _event_notification_content(event)
     now = datetime.now(UTC)
-
     for notification in existing:
         if notification.user_id not in eligible_user_ids:
-            session.delete(notification)
+            repository.delete_value(session, notification)
             continue
         notification.title = title
         notification.body = body
         notification.reference_type = "event"
         notification.updated_at = now
-
     created: list[Notification] = []
     for user_id in eligible_user_ids - existing_by_user_id.keys():
         notification = Notification(
@@ -121,26 +112,17 @@ def sync_event_notifications(session: Session, event: Event) -> list[Notificatio
             reference_type="event",
             reference_id=event.id,
         )
-        session.add(notification)
+        repository.add(session, notification)
         created.append(notification)
-
-    session.flush()
-    if created:
-        enqueue_push_notifications(session, created, get_settings())
-    return [
-        notification
-        for notification in existing + created
-        if notification.user_id in eligible_user_ids
-    ]
+    repository.flush(session)
+    enqueue_push_notifications(session, created, get_settings())
+    return [item for item in existing + created if item.user_id in eligible_user_ids]
 
 
 def delete_event_notifications(session: Session, event_id: UUID) -> None:
-    session.execute(
-        delete(Notification).where(
-            Notification.type == NotificationType.new_event,
-            Notification.reference_id == event_id,
-        )
-    )
+    """Domain helper: remove notifications without committing."""
+
+    repository.delete_event_notifications(session, event_id)
 
 
 def create_team_announcement(
@@ -151,53 +133,39 @@ def create_team_announcement(
     title: str,
     body: str,
 ) -> list[Notification]:
-    require_team_role(session, team_id, user.id, MembershipRole.admin)
-    existing_notifications = list(
-        session.scalars(
-            select(Notification)
-            .where(
-                Notification.team_id == team_id,
-                Notification.type == NotificationType.team_announcement,
-                Notification.reference_type == "team_announcement",
-                Notification.reference_id == announcement_id,
-            )
-            .order_by(Notification.created_at, Notification.id)
+    with transaction_boundary(session):
+        require_team_role(
+            session,
+            team_id,
+            user.id,
+            MembershipRole.admin,
+            permission_code="NOTIFICATION_PERMISSION_DENIED",
+            operation="notifications.create_announcement",
         )
-    )
-    if existing_notifications:
-        if any(
-            notification.title != title
-            or notification.body != body
-            or notification.reference_type != "team_announcement"
-            or notification.reference_id != announcement_id
-            for notification in existing_notifications
-        ):
-            raise TeamAnnouncementConflictError("Team announcement id already belongs to another request")
-        return existing_notifications
-
-    notifications = create_team_notifications(
-        session,
-        team_id,
-        NotificationType.team_announcement,
-        title=title,
-        body=body,
-        reference_type="team_announcement",
-        reference_id=announcement_id,
-    )
-    session.commit()
+        existing = repository.list_team_announcement_notifications(session, team_id, announcement_id)
+        if existing:
+            if any(
+                notification.title != title
+                or notification.body != body
+                or notification.reference_type != "team_announcement"
+                or notification.reference_id != announcement_id
+                for notification in existing
+            ):
+                raise TeamAnnouncementConflictError(
+                    "Team announcement id already belongs to another request"
+                )
+            notifications = existing
+        else:
+            notifications = create_team_notifications(
+                session,
+                team_id,
+                NotificationType.team_announcement,
+                title=title,
+                body=body,
+                reference_type="team_announcement",
+                reference_id=announcement_id,
+            )
     return notifications
-
-
-class NotificationNotFoundError(Exception):
-    pass
-
-
-class TeamAnnouncementConflictError(Exception):
-    pass
-
-
-class DeviceTokenNotFoundError(Exception):
-    pass
 
 
 def list_notifications(
@@ -208,38 +176,43 @@ def list_notifications(
     unread_only: bool = False,
 ) -> list[Notification]:
     if team_id is not None:
-        get_active_membership(session, team_id, user.id)
-    stmt = select(Notification).where(Notification.user_id == user.id).order_by(Notification.created_at.desc())
-    if team_id is not None:
-        stmt = stmt.where(Notification.team_id == team_id)
-    if notification_type is not None:
-        stmt = stmt.where(Notification.type == notification_type)
-    if unread_only:
-        stmt = stmt.where(Notification.read_at.is_(None))
-    return list(session.scalars(stmt))
+        get_active_membership(
+            session,
+            team_id,
+            user.id,
+            permission_code="NOTIFICATION_PERMISSION_DENIED",
+            operation="notifications.list",
+        )
+    return repository.list_for_user(
+        session,
+        user.id,
+        team_id=team_id,
+        notification_type=notification_type,
+        unread_only=unread_only,
+    )
 
 
 def mark_notification_read(session: Session, user: User, notification_id: UUID) -> Notification:
-    notification = session.get(Notification, notification_id)
-    if notification is None or notification.user_id != user.id:
-        raise NotificationNotFoundError("Notification not found")
-    if notification.read_at is None:
-        notification.read_at = datetime.now(UTC)
-        session.commit()
-        session.refresh(notification)
+    with transaction_boundary(session):
+        notification = repository.get_notification(session, notification_id)
+        if notification is None or notification.user_id != user.id:
+            raise NotificationNotFoundError()
+        if notification.read_at is None:
+            notification.read_at = datetime.now(UTC)
+    repository.refresh(session, notification)
     return notification
 
 
 def unread_count(session: Session, user: User, team_id: UUID | None = None) -> int:
     if team_id is not None:
-        get_active_membership(session, team_id, user.id)
-    stmt = select(func.count()).select_from(Notification).where(
-        Notification.user_id == user.id,
-        Notification.read_at.is_(None),
-    )
-    if team_id is not None:
-        stmt = stmt.where(Notification.team_id == team_id)
-    return session.scalar(stmt) or 0
+        get_active_membership(
+            session,
+            team_id,
+            user.id,
+            permission_code="NOTIFICATION_PERMISSION_DENIED",
+            operation="notifications.unread_count",
+        )
+    return repository.count_unread(session, user.id, team_id)
 
 
 def upsert_device_token(
@@ -248,23 +221,23 @@ def upsert_device_token(
     token: str,
     platform: DevicePlatform,
 ) -> DeviceToken:
-    device_token = session.scalar(select(DeviceToken).where(DeviceToken.token == token))
-    if device_token is None:
-        device_token = DeviceToken(user_id=user.id, token=token, platform=platform, is_active=True)
-        session.add(device_token)
-    else:
-        device_token.user_id = user.id
-        device_token.platform = platform
-        device_token.is_active = True
-        device_token.last_seen_at = datetime.now(UTC)
-    session.commit()
-    session.refresh(device_token)
+    with transaction_boundary(session):
+        device_token = repository.find_device_token(session, token)
+        if device_token is None:
+            device_token = DeviceToken(user_id=user.id, token=token, platform=platform, is_active=True)
+            repository.add(session, device_token)
+        else:
+            device_token.user_id = user.id
+            device_token.platform = platform
+            device_token.is_active = True
+            device_token.last_seen_at = datetime.now(UTC)
+    repository.refresh(session, device_token)
     return device_token
 
 
 def deactivate_device_token(session: Session, user: User, device_token_id: UUID) -> None:
-    device_token = session.get(DeviceToken, device_token_id)
-    if device_token is None or device_token.user_id != user.id:
-        raise DeviceTokenNotFoundError("Device token not found")
-    device_token.is_active = False
-    session.commit()
+    with transaction_boundary(session):
+        device_token = repository.get_device_token(session, device_token_id)
+        if device_token is None or device_token.user_id != user.id:
+            raise DeviceTokenNotFoundError()
+        device_token.is_active = False

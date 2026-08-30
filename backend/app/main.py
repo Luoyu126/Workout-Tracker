@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.coins.router import router as coins_router
+from app.common.exception_handlers import register_exception_handlers
+from app.common.logging import configure_logging
+from app.common.request_context import RequestContextMiddleware
 from app.config import get_settings
 from app.events.match_router import router as match_router
 from app.events.router import router as events_router
@@ -15,12 +18,15 @@ from app.users.router import router as users_router
 def create_app() -> FastAPI:
     settings = get_settings()
     settings.validate_runtime_configuration()
+    configure_logging(settings)
     app = FastAPI(
         title="Workout Tracker API",
         version="0.1.0",
         docs_url="/docs" if settings.normalized_app_env != "production" else None,
         redoc_url="/redoc" if settings.normalized_app_env != "production" else None,
     )
+    register_exception_handlers(app)
+    app.add_middleware(RequestContextMiddleware)
     if settings.cors_origins:
         app.add_middleware(
             CORSMiddleware,

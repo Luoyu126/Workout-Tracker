@@ -69,6 +69,9 @@ The mobile app authenticates with the managed auth provider. FastAPI verifies th
 
 The application database never stores passwords or password hashes.
 
+Backend request handling follows `Router → Application Service → Domain Helper → Repository/Query → Model`.
+Application Services own the single commit/rollback boundary for write use cases; Domain Helpers may flush but do not commit. Repository modules own entity persistence and locking, while Query modules own fixed-count cross-table reads such as the signup board. Expected failures propagate as `AppError` values to global FastAPI exception handlers, which attach an `X-Request-ID` and write structured rotating logs without request secrets.
+
 ## 4. Domain Modules
 
 The backend is split by business capability while sharing one process and one PostgreSQL database:

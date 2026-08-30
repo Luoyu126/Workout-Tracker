@@ -274,15 +274,19 @@ def test_match_log_creation_is_documented_and_implemented_as_idempotent() -> Non
     match_service = (
         ROOT_DIR / "backend" / "app" / "events" / "match_service.py"
     ).read_text(encoding="utf-8")
+    match_repository = (
+        ROOT_DIR / "backend" / "app" / "events" / "match_repository.py"
+    ).read_text(encoding="utf-8")
     match_api = (
         ROOT_DIR / "apps" / "mobile" / "src" / "features" / "events" / "matchApi.ts"
     ).read_text(encoding="utf-8")
 
     assert "id: UUID | None = None" in match_schemas
     assert "MatchLogConflictError" in match_service
-    assert "existing = session.get(MatchLogEntry, payload.id)" in match_service
+    assert "existing = match_repository.get_log(session, payload.id)" in match_service
+    assert "return session.get(MatchLogEntry, log_id)" in match_repository
     assert "existing.event_id != event_id or existing.created_by != user.id" in match_service
-    assert "if getattr(existing, field) != value:" in match_service
+    assert "if any(getattr(existing, field) != value for field, value in create_data.items()):" in match_service
     assert "id: input.id ?? generateClientUuid()" in match_api
 
     for phrase in (
@@ -501,13 +505,14 @@ def test_completion_service_locks_event_before_settlement() -> None:
         encoding="utf-8"
     )
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
+    events_repository = (ROOT_DIR / "backend/app/events/repository.py").read_text(encoding="utf-8")
     complete_body = events_service.split("def complete_event(", maxsplit=1)[1].split(
         "\n\ndef ",
         maxsplit=1,
     )[0]
 
     assert "_get_event_for_update" in events_service
-    assert "with_for_update()" in events_service
+    assert "with_for_update()" in events_repository
     assert "event = _get_event_for_update(session, event_id)" in complete_body
     assert "锁定 Event" in api_spec
 
@@ -543,6 +548,7 @@ def test_delete_event_locks_event_before_notification_and_hard_delete() -> None:
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
     requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
+    events_repository = (ROOT_DIR / "backend/app/events/repository.py").read_text(encoding="utf-8")
     delete_body_match = re.search(
         r"def delete_event\(.*?\n\n\ndef get_my_signup",
         events_service,
@@ -555,9 +561,8 @@ def test_delete_event_locks_event_before_notification_and_hard_delete() -> None:
     assert delete_body.index("event = _get_event_for_update(session, event_id)") < delete_body.index(
         "delete_event_notifications("
     )
-    assert delete_body.index("event = _get_event_for_update(session, event_id)") < delete_body.index(
-        "session.delete(event)"
-    )
+    assert "repository.delete_event_graph(session, event)" in delete_body
+    assert "session.delete(event)" in events_repository
 
     assert "删除前后端锁定 Event 行" in api_spec
     assert "删除对应的 new_event Notification" in api_spec
@@ -582,9 +587,9 @@ def test_event_creation_is_documented_and_implemented_as_idempotent() -> None:
     assert "id: UUID | None = None" in events_schemas
     assert "EventConflictError" in events_service
     assert "_event_matches_create_request" in events_service
-    assert "existing = session.get(Event, payload.id)" in events_service
-    assert "existing = session.get(Event, event_payload.id)" in events_service
-    assert "match_details.opponent != payload.match_details.opponent" in events_service
+    assert "existing = repository.get_event(session, payload.id)" in events_service
+    assert "existing = repository.get_event(session, event_payload.id)" in events_service
+    assert "details.opponent != payload.match_details.opponent" in events_service
     assert "Use /teams/{team_id}/matches to create matches" in events_service
     assert "id: input.id ?? generateClientUuid()" in events_api
     assert "id: input.event.id ?? generateClientUuid()" in events_api
@@ -618,7 +623,7 @@ def test_update_event_is_documented_and_implemented_as_noop_idempotent() -> None
     assert "event = _get_event_for_update(session, event_id)" in update_body.group(0)
     assert "has_changes = False" in update_body.group(0)
     assert "if getattr(event, field) != value:" in update_body.group(0)
-    assert "if getattr(match_details, field) != value:" in update_body.group(0)
+    assert "if getattr(details, field) != value:" in update_body.group(0)
     assert "if has_changes:" in update_body.group(0)
     assert "sync_event_notifications(session, event)" in update_body.group(0)
 
@@ -1050,6 +1055,7 @@ def test_event_completion_rewards_only_current_active_members() -> None:
     api_spec = (ROOT_DIR / "api-spec.md").read_text(encoding="utf-8")
     requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
+    eligibility = (ROOT_DIR / "backend/app/teams/eligibility.py").read_text(encoding="utf-8")
     complete_body = events_service.split("def complete_event(", maxsplit=1)[1].split(
         "\n\ndef ",
         maxsplit=1,
@@ -1059,12 +1065,13 @@ def test_event_completion_rewards_only_current_active_members() -> None:
         maxsplit=1,
     )[0]
 
+    assert "is_membership_eligible_for_event(membership, event)" in eligible_body
     for phrase in (
-        "TeamMembership.joined_at <= event.start_time",
-        "TeamMembership.status == MembershipStatus.active",
-        "TeamMembership.role == MembershipRole.member",
+        "_as_utc(membership.joined_at) <= _as_utc(at)",
+        "membership.status == MembershipStatus.active",
+        "membership.role == MembershipRole.member",
     ):
-        assert phrase in eligible_body
+        assert phrase in eligibility
 
     for phrase in (
         "SignupStatus.maybe",
@@ -1142,7 +1149,7 @@ def test_coin_rule_creation_is_documented_and_implemented_as_idempotent() -> Non
 
     assert "id: UUID | None = None" in coin_schemas
     assert "CoinRuleConflictError" in coin_service
-    assert "existing = session.get(CoinRule, payload.id)" in coin_service
+    assert "existing = repository.get_rule(session, payload.id)" in coin_service
     assert "enum_value(existing.trigger_type) != enum_value(payload.trigger_type)" in coin_service
     assert "existing.amount != payload.amount" in coin_service
     assert "existing.config != payload.config" in coin_service
@@ -1163,6 +1170,9 @@ def test_coin_rule_creation_is_documented_and_implemented_as_idempotent() -> Non
 def test_team_announcement_creation_is_documented_and_implemented_as_idempotent() -> None:
     notification_schemas = (ROOT_DIR / "backend/app/notifications/schemas.py").read_text(encoding="utf-8")
     notification_service = (ROOT_DIR / "backend/app/notifications/service.py").read_text(encoding="utf-8")
+    notification_repository = (
+        ROOT_DIR / "backend/app/notifications/repository.py"
+    ).read_text(encoding="utf-8")
     notification_api = (ROOT_DIR / "apps/mobile/src/features/notifications/api.ts").read_text(encoding="utf-8")
     notification_navigation = (
         ROOT_DIR / "apps/mobile/src/features/notifications/navigation.ts"
@@ -1173,8 +1183,8 @@ def test_team_announcement_creation_is_documented_and_implemented_as_idempotent(
 
     assert "id: UUID" in notification_schemas
     assert "TeamAnnouncementConflictError" in notification_service
-    assert 'Notification.reference_type == "team_announcement"' in notification_service
-    assert "Notification.reference_id == announcement_id" in notification_service
+    assert 'Notification.reference_type == "team_announcement"' in notification_repository
+    assert "Notification.reference_id == announcement_id" in notification_repository
     assert 'reference_type="team_announcement"' in notification_service
     assert "reference_id=announcement_id" in notification_service
     assert "id: input.id ?? generateClientUuid()" in notification_api
@@ -1315,7 +1325,7 @@ def test_store_item_creation_is_documented_and_implemented_as_idempotent() -> No
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
 
     assert "id: UUID | None = None" in store_schemas
-    assert "existing = session.get(StoreItem, payload.id)" in store_service
+    assert "existing = repository.get_store_item(session, payload.id)" in store_service
     assert "Store item id already belongs to another request" in store_service
     assert "existing.price != payload.price" in store_service
     assert "existing.stock != payload.stock" in store_service
@@ -1340,10 +1350,10 @@ def test_store_redemption_source_locks_inventory_and_user_coin_ledger_before_bal
         maxsplit=1,
     )[0]
 
-    assert "select(StoreItem).where(StoreItem.id == payload.store_item_id).with_for_update()" in create_redemption_body
-    assert "_lock_user_coin_ledger(session, user.id)" in create_redemption_body
-    assert create_redemption_body.index("_lock_user_coin_ledger(session, user.id)") < create_redemption_body.index(
-        "coin_balance(session, team_id, user)"
+    assert "repository.get_store_item_for_update(session, payload.store_item_id)" in create_redemption_body
+    assert "repository.lock_user_coin_ledger(session, user.id)" in create_redemption_body
+    assert create_redemption_body.index("repository.lock_user_coin_ledger(session, user.id)") < create_redemption_body.index(
+        "coin_repository.sum_balance(session, team_id, user.id)"
     )
 
 
@@ -1358,10 +1368,9 @@ def test_team_member_creation_is_documented_and_implemented_as_idempotent_on_tea
     assert "membership.jersey_number == payload.jersey_number" in team_service
     assert "membership.player_name == payload.player_name" in team_service
     assert "enum_value(membership.status) == enum_value(payload.status)" in team_service
-    assert "return get_member(session, team_id, payload.user_id, user)" in team_service
-    assert team_service.index("return get_member(session, team_id, payload.user_id, user)") < team_service.index(
-        'raise DuplicateMembershipError("Membership already exists")'
-    )
+    assert "existing = repository.find_membership(session, team_id, payload.user_id)" in team_service
+    assert "if not _membership_matches_create_request(existing, payload):" in team_service
+    assert "raise DuplicateMembershipError()" in team_service
 
     for phrase in (
         "`TeamMembership` 以 `(team_id, user_id)` 唯一",
@@ -1382,15 +1391,15 @@ def test_team_member_update_locks_active_admins_before_last_admin_count() -> Non
         "\ndef count_active_admins(",
         maxsplit=1,
     )[0]
-    lock_helper_body = team_service.split("def _lock_active_admin_memberships(", maxsplit=1)[1].split(
-        "\ndef build_team_home(",
-        maxsplit=1,
+    team_repository = (ROOT_DIR / "backend/app/teams/repository.py").read_text(encoding="utf-8")
+    lock_helper_body = team_repository.split("def lock_active_admin_memberships(", maxsplit=1)[1].split(
+        "\ndef add_membership(", maxsplit=1
     )[0]
 
     assert "if would_remove_active_admin:" in update_member_body
-    assert "_lock_active_admin_memberships(session, team_id)" in update_member_body
-    assert update_member_body.index("_lock_active_admin_memberships(session, team_id)") < update_member_body.index(
-        "count_active_admins(session, team_id) <= 1"
+    assert "repository.lock_active_admin_memberships(session, team_id)" in update_member_body
+    assert update_member_body.index("repository.lock_active_admin_memberships(session, team_id)") < update_member_body.index(
+        "repository.count_active_admins(session, team_id) <= 1"
     )
     assert "TeamMembership.role == MembershipRole.admin" in lock_helper_body
     assert "TeamMembership.status == MembershipStatus.active" in lock_helper_body

@@ -4,10 +4,9 @@ Domain-specific policy belongs in each domain service.
 """
 
 from app.common.enums import MembershipRole
+from app.common.errors import PermissionDeniedError
 
-
-class PermissionDeniedError(Exception):
-    pass
+__all__ = ["PermissionDeniedError", "role_at_least"]
 
 
 ROLE_RANK: dict[MembershipRole, int] = {

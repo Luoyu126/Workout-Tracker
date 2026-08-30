@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.common.database import get_db
+from app.common.dependencies import current_user
 from app.common.enums import NotificationType
-from app.common.permissions import PermissionDeniedError
 from app.models import DeviceToken, Notification, User
 from app.notifications.schemas import (
     DeviceTokenRead,
@@ -15,9 +15,6 @@ from app.notifications.schemas import (
     UnreadCountRead,
 )
 from app.notifications.service import (
-    DeviceTokenNotFoundError,
-    NotificationNotFoundError,
-    TeamAnnouncementConflictError,
     create_team_announcement,
     deactivate_device_token,
     list_notifications,
@@ -25,31 +22,8 @@ from app.notifications.service import (
     unread_count,
     upsert_device_token,
 )
-from app.users.router import current_user
 
 router = APIRouter(prefix="/api/v1", tags=["notifications"])
-
-
-def _to_http_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, PermissionDeniedError):
-        return HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "NOTIFICATION_PERMISSION_DENIED", "message": "Notification permission denied"},
-        )
-    if isinstance(exc, (NotificationNotFoundError, DeviceTokenNotFoundError)):
-        return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "NOTIFICATION_RESOURCE_NOT_FOUND", "message": "Resource not found"},
-        )
-    if isinstance(exc, TeamAnnouncementConflictError):
-        return HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "TEAM_ANNOUNCEMENT_CONFLICT", "message": str(exc)},
-        )
-    return HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail={"code": "INTERNAL_ERROR", "message": "Unexpected error"},
-    )
 
 
 @router.get("/notifications", response_model=list[NotificationRead])
@@ -60,10 +34,7 @@ def read_notifications(
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
 ) -> list[Notification]:
-    try:
-        return list_notifications(session, user, team_id, notification_type, unread_only)
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
+    return list_notifications(session, user, team_id, notification_type, unread_only)
 
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationRead)
@@ -72,10 +43,7 @@ def post_notification_read(
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
 ) -> Notification:
-    try:
-        return mark_notification_read(session, user, notification_id)
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
+    return mark_notification_read(session, user, notification_id)
 
 
 @router.get("/notifications/unread-count", response_model=UnreadCountRead)
@@ -84,10 +52,7 @@ def read_unread_count(
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
 ) -> dict[str, int]:
-    try:
-        return {"count": unread_count(session, user, team_id)}
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
+    return {"count": unread_count(session, user, team_id)}
 
 
 @router.post(
@@ -101,10 +66,7 @@ def post_team_announcement(
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
 ) -> list[Notification]:
-    try:
-        return create_team_announcement(session, team_id, user, payload.id, payload.title, payload.body)
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
+    return create_team_announcement(session, team_id, user, payload.id, payload.title, payload.body)
 
 
 @router.put("/device-tokens", response_model=DeviceTokenRead)
@@ -122,7 +84,4 @@ def delete_device_token(
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
 ) -> None:
-    try:
-        deactivate_device_token(session, user, device_token_id)
-    except Exception as exc:
-        raise _to_http_error(exc) from exc
+    deactivate_device_token(session, user, device_token_id)
