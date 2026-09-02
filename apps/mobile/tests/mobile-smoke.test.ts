@@ -12,21 +12,21 @@ const repoRoot = resolve(appRoot, "../..");
 
 const requiredRoutes = [
   "app/_layout.tsx",
-  "app/(tabs)/index.tsx",
+  "app/(app)/(tabs)/index.tsx",
   "app/login.tsx",
-  "app/(tabs)/profile.tsx",
-  "app/teams.tsx",
-  "app/(tabs)/inbox.tsx",
-  "app/teams/[teamId]/index.tsx",
-  "app/teams/[teamId]/members.tsx",
-  "app/teams/[teamId]/events.tsx",
-  "app/teams/[teamId]/signup-board.tsx",
-  "app/teams/[teamId]/store.tsx",
-  "app/teams/[teamId]/coins.tsx",
-  "app/store-items/[storeItemId].tsx",
-  "app/events/[eventId].tsx",
-  "app/events/[eventId]/live.tsx",
-  "app/events/[eventId]/summary.tsx"
+  "app/(app)/(tabs)/profile.tsx",
+  "app/(app)/teams.tsx",
+  "app/(app)/(tabs)/inbox.tsx",
+  "app/(app)/teams/[teamId]/index.tsx",
+  "app/(app)/teams/[teamId]/members.tsx",
+  "app/(app)/teams/[teamId]/events.tsx",
+  "app/(app)/teams/[teamId]/signup-board.tsx",
+  "app/(app)/teams/[teamId]/store.tsx",
+  "app/(app)/teams/[teamId]/coins.tsx",
+  "app/(app)/store-items/[storeItemId].tsx",
+  "app/(app)/events/[eventId].tsx",
+  "app/(app)/events/[eventId]/live.tsx",
+  "app/(app)/events/[eventId]/summary.tsx"
 ];
 
 const screensToScan = requiredRoutes.filter((route) => route !== "app/_layout.tsx");
@@ -94,6 +94,8 @@ describe("mobile MVP smoke", () => {
     const supabaseClient = readFileSync(resolve(appRoot, "src/lib/supabase/client.ts"), "utf-8");
     const supabaseConfig = readFileSync(resolve(appRoot, "src/lib/supabase/config.ts"), "utf-8");
     const translationsSource = readFileSync(resolve(appRoot, "src/lib/i18n/translations.ts"), "utf-8");
+    const authProvider = readFileSync(resolve(appRoot, "src/providers/AuthProvider.tsx"), "utf-8");
+    const teamProvider = readFileSync(resolve(appRoot, "src/providers/TeamProvider.tsx"), "utf-8");
 
     expect(errors).toContain("ApiNetworkError");
     expect(errors).toContain("common.networkUnavailable");
@@ -127,6 +129,22 @@ describe("mobile MVP smoke", () => {
     expect(layoutSource).toContain("KeyboardAvoidingView");
     expect(layoutSource).toContain('behavior={Platform.OS === "ios" ? "padding" : undefined}');
     expect(layoutSource).toContain("keyboardAvoidingContainer");
+    expect(layoutSource).toContain("Stack.Protected");
+    expect(layoutSource).toContain('guard={status !== "ready"}');
+    expect(layoutSource).toContain('guard={status === "ready"}');
+    expect(layoutSource).toContain('<Stack.Screen name="(app)"');
+    expect(layoutSource).toContain('status === "checking"');
+    expect(layoutSource).toContain("pendingNotificationRef");
+    expect(authProvider).toContain('useState<AuthStatus>("checking")');
+    expect(authProvider).toContain("supabase.auth.getSession()");
+    expect(authProvider).toContain("supabase.auth.onAuthStateChange");
+    expect(authProvider).toContain('commitState("needsProfile")');
+    expect(authProvider).toContain('commitState("error", sessionError)');
+    expect(authProvider).toContain('commitState("ready")');
+    expect(authProvider).toContain('return "verificationRequired"');
+    expect(authProvider).toContain("await syncProfile(profile)");
+    expect(authProvider).toContain("queryClient.clear()");
+    expect(teamProvider).toContain('authStatus !== "ready"');
     expect(supabaseClient).toContain("storage: AsyncStorage");
     expect(supabaseClient).toContain("autoRefreshToken: true");
     expect(supabaseClient).toContain("persistSession: true");
@@ -139,7 +157,7 @@ describe("mobile MVP smoke", () => {
     expect(supabaseConfig).toContain("developmentSupabaseAnonKeys");
     expect(supabaseConfig).toContain("dev-placeholder-anon-key");
 
-    for (const route of ["app/teams.tsx", "app/(tabs)/inbox.tsx", "app/teams/[teamId]/events.tsx", "app/teams/[teamId]/store.tsx"]) {
+    for (const route of ["app/(app)/teams.tsx", "app/(app)/(tabs)/inbox.tsx", "app/(app)/teams/[teamId]/events.tsx", "app/(app)/teams/[teamId]/store.tsx"]) {
       const source = readFileSync(resolve(appRoot, route), "utf-8");
 
       expect(source).toContain("ScreenState");
@@ -152,10 +170,10 @@ describe("mobile MVP smoke", () => {
 
   test("core list screens auto-load on entry while keeping manual refresh buttons", () => {
     const autoLoadExpectations = [
-      ["app/teams.tsx", "handleLoadTeams"],
-      ["app/(tabs)/inbox.tsx", "handleLoadNotifications"],
-      ["app/teams/[teamId]/events.tsx", "handleLoadEvents"],
-      ["app/teams/[teamId]/store.tsx", "handleLoadItems"]
+      ["app/(app)/teams.tsx", "handleLoadTeams"],
+      ["app/(app)/(tabs)/inbox.tsx", "handleLoadNotifications"],
+      ["app/(app)/teams/[teamId]/events.tsx", "handleLoadEvents"],
+      ["app/(app)/teams/[teamId]/store.tsx", "handleLoadItems"]
     ] as const;
 
     for (const [route, loader] of autoLoadExpectations) {
@@ -165,14 +183,14 @@ describe("mobile MVP smoke", () => {
       expect(source).toContain(`void ${loader}();`);
     }
 
-    const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+    const homeSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
     expect(homeSource).toContain("useTeamContext");
     expect(homeSource).toContain("onRefresh");
     expect(homeSource).toContain("refresh");
   });
 
   test("teams screen displays accessible organizations alongside teams", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams.tsx"), "utf-8");
 
     expect(source).toContain("getMyOrganizations");
     expect(source).toContain("organizations");
@@ -190,8 +208,8 @@ describe("mobile MVP smoke", () => {
   });
 
   test("store item detail screen loads item details and supports redemption", () => {
-    const listSource = readFileSync(resolve(appRoot, "app/teams/[teamId]/store.tsx"), "utf-8");
-    const detailSource = readFileSync(resolve(appRoot, "app/store-items/[storeItemId].tsx"), "utf-8");
+    const listSource = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/store.tsx"), "utf-8");
+    const detailSource = readFileSync(resolve(appRoot, "app/(app)/store-items/[storeItemId].tsx"), "utf-8");
 
     expect(listSource).toContain('pathname: "/store-items/[storeItemId]"');
     expect(listSource).toContain("store.detail");
@@ -217,13 +235,13 @@ describe("mobile MVP smoke", () => {
 
   test("detail and management screens auto-load and use shared state UI", () => {
     const autoLoadExpectations = [
-      ["app/teams/[teamId]/index.tsx", "handleLoadHome"],
-      ["app/teams/[teamId]/members.tsx", "handleLoadMembers"],
-      ["app/teams/[teamId]/coins.tsx", "handleLoadCoins"],
-      ["app/teams/[teamId]/signup-board.tsx", "handleLoadBoard"],
-      ["app/events/[eventId].tsx", "handleLoadEvent"],
-      ["app/events/[eventId]/live.tsx", "handleLoadBoard"],
-      ["app/events/[eventId]/summary.tsx", "handleLoadSummary"]
+      ["app/(app)/teams/[teamId]/index.tsx", "handleLoadHome"],
+      ["app/(app)/teams/[teamId]/members.tsx", "handleLoadMembers"],
+      ["app/(app)/teams/[teamId]/coins.tsx", "handleLoadCoins"],
+      ["app/(app)/teams/[teamId]/signup-board.tsx", "handleLoadBoard"],
+      ["app/(app)/events/[eventId].tsx", "handleLoadEvent"],
+      ["app/(app)/events/[eventId]/live.tsx", "handleLoadBoard"],
+      ["app/(app)/events/[eventId]/summary.tsx", "handleLoadSummary"]
     ] as const;
 
     for (const [route, loader] of autoLoadExpectations) {
@@ -242,20 +260,20 @@ describe("mobile MVP smoke", () => {
 
   test("API-backed screens format authentication, permission and validation errors", () => {
     const apiBackedScreens = [
-      "app/(tabs)/index.tsx",
+      "app/(app)/(tabs)/index.tsx",
       "app/login.tsx",
-      "app/(tabs)/profile.tsx",
-      "app/teams.tsx",
-      "app/(tabs)/inbox.tsx",
-      "app/teams/[teamId]/index.tsx",
-      "app/teams/[teamId]/members.tsx",
-      "app/teams/[teamId]/events.tsx",
-      "app/teams/[teamId]/signup-board.tsx",
-      "app/teams/[teamId]/coins.tsx",
-      "app/teams/[teamId]/store.tsx",
-      "app/events/[eventId].tsx",
-          "app/events/[eventId]/live.tsx",
-      "app/events/[eventId]/summary.tsx"
+      "app/(app)/(tabs)/profile.tsx",
+      "app/(app)/teams.tsx",
+      "app/(app)/(tabs)/inbox.tsx",
+      "app/(app)/teams/[teamId]/index.tsx",
+      "app/(app)/teams/[teamId]/members.tsx",
+      "app/(app)/teams/[teamId]/events.tsx",
+      "app/(app)/teams/[teamId]/signup-board.tsx",
+      "app/(app)/teams/[teamId]/coins.tsx",
+      "app/(app)/teams/[teamId]/store.tsx",
+      "app/(app)/events/[eventId].tsx",
+          "app/(app)/events/[eventId]/live.tsx",
+      "app/(app)/events/[eventId]/summary.tsx"
     ];
 
     for (const route of apiBackedScreens) {
@@ -264,7 +282,7 @@ describe("mobile MVP smoke", () => {
       expect(source).toContain("formatApiError");
     }
 
-    const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+    const homeSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
     expect(homeSource).toContain("ScreenState");
     expect(homeSource).toContain('t("common.authRequired")');
     expect(homeSource).toContain('t("common.loading")');
@@ -294,7 +312,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("home screen uses live team data instead of static demo metrics", () => {
-    const source = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
     const teamProvider = readFileSync(resolve(appRoot, "src/providers/TeamProvider.tsx"), "utf-8");
 
     expect(teamProvider).toContain("getMyTeams");
@@ -309,20 +327,22 @@ describe("mobile MVP smoke", () => {
     expect(source).not.toContain("86%");
   });
 
-  test("login screen supports sign-in without forcing profile fields and syncs unsynced users", () => {
+  test("login screen delegates guarded sign-in, sign-up and profile completion to AuthProvider", () => {
     const source = readFileSync(resolve(appRoot, "app/login.tsx"), "utf-8");
     const signInBody = functionBody(source, "handleSignIn");
 
-    expect(source).toContain("didAuthenticate");
-    expect(source).toContain("getMyProfile");
-    expect(source).toContain("syncProfile");
+    expect(source).toContain("useAuth");
+    expect(source).toContain("signInAndPrepare");
+    expect(source).toContain("signUpAndPrepare");
+    expect(source).toContain("completeProfile");
+    expect(source).toContain("retrySessionCheck");
+    expect(source).toContain('status === "needsProfile"');
+    expect(source).toContain('status === "error"');
     expect(source).toContain("buildProfileInput");
     expect(source).toContain("normalizeAuthCredentials");
     expect(source).toContain("normalizeProfileInput");
-    expect(source).toContain("USER_NOT_SYNCED");
     expect(source).toContain("LanguageToggle");
     expect(source).toContain("auth.signInNeedsProfile");
-    expect(source).toContain("auth.signInSyncedProfile");
     expect(source).toContain("auth.nameRequired");
     expect(source).toContain("auth.credentialsRequired");
     expect(source).toContain("auth.supabaseConfigMissing");
@@ -340,14 +360,13 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain('textContentType="password"');
     expect(source).toContain("secureTextEntry");
     expect(source).toContain("autoCorrect={false}");
-    expect(source).toContain('router.replace("/teams")');
-    expect(source).toContain("home.openTeams");
     expect(source).toContain("Screen");
     expect(signInBody).not.toContain("buildProfileInput()");
+    expect(source).not.toContain("router.replace");
   });
 
   test("profile screen validates and normalizes profile updates", () => {
-    const source = readFileSync(resolve(appRoot, "app/(tabs)/profile.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/(tabs)/profile.tsx"), "utf-8");
 
     expect(source).toContain("useEffect");
     expect(source).toContain("void handleLoadProfile();");
@@ -376,7 +395,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("team home exposes captain or admin team profile management", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/index.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/index.tsx"), "utf-8");
 
     expect(source).toContain("updateTeam");
     expect(source).toContain("current_membership");
@@ -414,7 +433,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("event detail exposes current signup and not-going note input", () => {
-    const source = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/events/[eventId].tsx"), "utf-8");
 
     expect(source).toContain("getMySignup");
     expect(source).toContain("leaveReason");
@@ -498,7 +517,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("event creation exposes scheduling, signup deadline and match notes fields", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/events.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events.tsx"), "utf-8");
     const validationSource = readFileSync(resolve(appRoot, "src/features/events/validation.ts"), "utf-8");
 
     expect(source).toContain("events.description");
@@ -572,7 +591,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("coin screen exposes ledger and keeps negative adjustment input possible", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/coins.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/coins.tsx"), "utf-8");
     const apiSource = readFileSync(resolve(appRoot, "src/features/coins/api.ts"), "utf-8");
     const validationSource = readFileSync(resolve(appRoot, "src/features/coins/validation.ts"), "utf-8");
 
@@ -663,7 +682,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("inbox links actionable notifications back to relevant MVP screens", () => {
-    const source = readFileSync(resolve(appRoot, "app/(tabs)/inbox.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/(tabs)/inbox.tsx"), "utf-8");
 
     expect(source).toContain("createTeamAnnouncement");
     expect(source).toContain("handleCreateAnnouncement");
@@ -713,7 +732,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("store screen separates player and captain redemption flows", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/store.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/store.tsx"), "utf-8");
 
     expect(source).toContain("refreshStoreData");
     expect(source).toContain("await refreshStoreData();");
@@ -838,7 +857,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("members screen supports editable jersey and position profiles", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/members.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/members.tsx"), "utf-8");
 
     expect(source).toContain("memberDrafts");
     expect(source).toContain("applyMembers");
@@ -900,9 +919,9 @@ describe("mobile MVP smoke", () => {
   });
 
   test("signup board route exposes team ranking data and filters", () => {
-    const source = readFileSync(resolve(appRoot, "app/teams/[teamId]/signup-board.tsx"), "utf-8");
-    const teamsSource = readFileSync(resolve(appRoot, "app/teams.tsx"), "utf-8");
-    const teamHomeSource = readFileSync(resolve(appRoot, "app/teams/[teamId]/index.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/signup-board.tsx"), "utf-8");
+    const teamsSource = readFileSync(resolve(appRoot, "app/(app)/teams.tsx"), "utf-8");
+    const teamHomeSource = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/index.tsx"), "utf-8");
 
     expect(source).toContain("getTeamSignupBoard");
     expect(source).toContain("going_rate");
@@ -920,7 +939,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("event detail route can complete published events with signup rewards", () => {
-    const source = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/events/[eventId].tsx"), "utf-8");
 
     expect(source).toContain("completeEvent");
     expect(source).toContain("canManageEventRole");
@@ -952,9 +971,9 @@ describe("mobile MVP smoke", () => {
   });
 
   test("match summary route exposes final match stats, signups and rewards", () => {
-    const source = readFileSync(resolve(appRoot, "app/events/[eventId]/summary.tsx"), "utf-8");
-    const eventSource = readFileSync(resolve(appRoot, "app/events/[eventId].tsx"), "utf-8");
-    const liveSource = readFileSync(resolve(appRoot, "app/events/[eventId]/live.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/events/[eventId]/summary.tsx"), "utf-8");
+    const eventSource = readFileSync(resolve(appRoot, "app/(app)/events/[eventId].tsx"), "utf-8");
+    const liveSource = readFileSync(resolve(appRoot, "app/(app)/events/[eventId]/live.tsx"), "utf-8");
 
     expect(source).toContain("getMatchSummary");
     expect(source).toContain("summary.counts.goal");
@@ -973,7 +992,7 @@ describe("mobile MVP smoke", () => {
   });
 
   test("live board validates match minute and localizes match log labels", () => {
-    const source = readFileSync(resolve(appRoot, "app/events/[eventId]/live.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/events/[eventId]/live.tsx"), "utf-8");
 
     expect(source).toContain("LIVE_BOARD_POLL_INTERVAL_MS");
     expect(source).toContain("setInterval");
@@ -1033,25 +1052,18 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("match.substitution");
   });
 
-  test("Maestro smoke flow covers the core unauthenticated mobile navigation", () => {
+  test("Maestro smoke flow starts at the guarded login and registration screen", () => {
     const source = readFileSync(resolve(repoRoot, "e2e/maestro/app-smoke.yaml"), "utf-8");
 
     for (const label of [
-      "球队首页",
       "显示语言: zh-CN",
-      "Team Home",
       "Display language: en",
-      "登录",
       "欢迎回来",
       "邮箱 / 学号",
       "立即注册",
-      "个人资料",
-      "头像 URL，可留空",
-      "我的",
-      "活动",
-      "收件箱",
-      "商店",
-      "球队商店"
+      "创建账号",
+      "姓名",
+      "学号"
     ]) {
       expect(source).toContain(label);
     }

@@ -72,7 +72,7 @@ function reportProblems(report) {
     "Team announcement notification",
     "Event signup states: going / maybe / not going with reason",
     "Signup read-only after deadline or completion",
-    "Captain/admin match live logging: goal, card, substitution",
+    "Admin match live logging: goal, card, substitution",
     "Match log delete confirmation",
     "Member read-only live board access",
     "Event completion with signup rewards for going members",
@@ -82,7 +82,7 @@ function reportProblems(report) {
     "Coin balance, ledger, reward rule editing, and manual adjustment",
     "Store item redemption and finite-stock deduction",
     "Fulfillment notification",
-    "Refund and finite-stock restoration",
+    "Refund with finite stock preserved",
     "Notification deep-link behavior"
   ];
 

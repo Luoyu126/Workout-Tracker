@@ -28,7 +28,7 @@ suite plus device smoke checks:
 2. Install the same EAS build profile intended for release on one iOS device and one Android device.
 3. Run `npm run e2e:maestro:check`, then `npm run e2e:maestro` on each platform where Maestro can drive the installed build.
 4. If Maestro is unavailable for a device, manually follow `app-smoke.yaml` and record the result.
-5. Against the target backend, manually confirm the authenticated core path at least once: login/sign-up -> team navigation -> Inbox -> event signup -> captain/admin match log write -> member read-only live board -> event completion with signup rewards -> coin balance -> store redemption.
+5. Against the target backend, manually confirm the authenticated core path at least once: login/sign-up -> team navigation -> Inbox -> member-only event signup -> admin match log write -> member read-only live board -> event completion with signup rewards -> coin balance -> store redemption.
 6. Use [device-smoke-checklist.md](device-smoke-checklist.md), then run `npm run e2e:device-report:create -- <candidate>` to create a gitignored report from [device-smoke-report-template.md](device-smoke-report-template.md) for the iOS and Android platform results, build profile, backend URL, evidence, and any failure notes.
 7. After filling the report, run `npm run e2e:device-report:check -- e2e/maestro/device-smoke-report-YYYYMMDD-<candidate>.md` to catch missing platform pass rows, final decision checkboxes, automated gate evidence, and core smoke-path notes.
 
@@ -48,8 +48,8 @@ navigation with team announcement controls.
 
 The full backend business path is covered in `npm run backend:demo-flow`:
 
-publish event -> notify team -> create/publish match -> signup -> captain logs match goal
+create event -> notify team -> publish event -> create/publish match -> member signup -> admin logs match goal
 -> member reads live board -> complete event with signup rewards for going members
--> redeem item -> fulfill -> refund and restore
+-> redeem item -> fulfill -> refund while preserving fulfilled-item stock
 inventory -> publish team announcement. The demo seed also exercises avatar,
 team logo, and store item image URL persistence.

@@ -90,8 +90,8 @@ test("dynamic enum translation keys cover MVP API values", () => {
 
 test("language switching is reachable before and after authentication", () => {
   const loginSource = readFileSync(resolve(appRoot, "app/login.tsx"), "utf-8");
-  const homeSource = readFileSync(resolve(appRoot, "app/(tabs)/index.tsx"), "utf-8");
-  const profileSource = readFileSync(resolve(appRoot, "app/(tabs)/profile.tsx"), "utf-8");
+  const homeSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
+  const profileSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/profile.tsx"), "utf-8");
   const languageToggleSource = readFileSync(resolve(appRoot, "src/components/LanguageToggle.tsx"), "utf-8");
 
   expect(loginSource).toContain("LanguageToggle");

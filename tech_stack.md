@@ -10,7 +10,8 @@ Core rules:
 
 - The mobile app is never authoritative for permissions, signup settlement, coin amounts, balances, inventory, or state transitions.
 - User identity and TeamMembership authorization are separate.
-- EventSignup is the source of truth for participation intent and completion rewards; there is no separate Attendance domain.
+- EventSignup from `member` accounts is the source of truth for participation intent and completion rewards; there is no separate Attendance domain.
+- Team admin accounts manage activities and rewards, but cannot sign up, appear on signup boards, or receive activity signup rewards.
 - Coins are an immutable CoinTransaction ledger scoped to (user, team).
 - Match-only data uses MatchDetails and MatchLogEntry.
 - Redemption creation, coin deduction, and inventory deduction are atomic.
@@ -107,7 +108,7 @@ The V1 database contains exactly:
 
 ### Canonical enums
 
-- Membership role: member | captain | admin
+- Membership role: member | admin
 - Membership status: active | inactive | pending
 - Team status: active | archived
 - Event type: training | match | other
@@ -132,7 +133,7 @@ conflict.
 Store item creation also accepts a client-generated StoreItem UUID. Retrying the
 same create-item request with identical team, creator, and payload returns the
 existing StoreItem; reusing the id with different item details returns a
-conflict so captains do not duplicate catalog entries during mobile retries.
+conflict so admins do not duplicate catalog entries during mobile retries.
 
 Coin rule creation accepts a client-generated CoinRule UUID. Retrying the same
 create-rule request with identical team, creator, trigger, amount, config, and
@@ -153,19 +154,16 @@ to add the same user with different membership details returns a duplicate
 membership conflict.
 
 Publishing an event locks the Event row, transitions draft -> published once,
-creates one published-event notification batch, and treats repeated publishing
-of an already published event as idempotent: return the current Event without
-creating duplicate notifications.
+and treats repeated publishing of an already published event as idempotent:
+return the current Event without creating duplicate notifications. Event
+notifications are created only when an event or match is created.
 
-Updating an event locks the Event row and only creates an event-updated
-notification batch when at least one event or match-details field actually
-changes. Retrying the same update payload against the already-updated Event
-returns the current Event without creating duplicate notifications.
+Updating an event locks the Event row. Retrying the same update payload against
+the already-updated Event returns the current Event without creating duplicate
+side effects.
 
-Deleting an uncompleted event also locks the Event row before deciding whether
-to create the event-deleted notification batch and hard-delete child records, so
-concurrent delete attempts cannot race notification creation against physical
-deletion.
+Deleting an uncompleted event also locks the Event row before hard-deleting
+child records, so concurrent delete attempts cannot race physical deletion.
 
 Match log creation accepts a client-generated UUID id. Retrying the same live
 match-log create request with the same id and identical payload returns the
@@ -179,16 +177,16 @@ Completing an event must run in one database transaction:
 
 1. Lock the event row.
 2. Verify the event is published.
-3. Resolve members eligible at `event.start_time`: `joined_at <= event.start_time` and either still active or `left_at >= event.start_time`.
+3. Resolve eligible player members at `event.start_time`: role is `member`, `joined_at <= event.start_time`, and either still active or `left_at >= event.start_time`.
 4. Apply optional final match details for match events.
-5. For each eligible member, treat missing signup as `maybe`; for `going` signups, insert missing `signup_reward` CoinTransaction rows according to active team CoinRule settings (`training_signup` or `match_signup`).
+5. For each eligible player member, treat missing signup as `maybe`; for `going` signups, insert missing `signup_reward` CoinTransaction rows according to active team CoinRule settings (`training_signup` or `match_signup`).
 6. Insert coin_earned notifications for newly issued rewards.
 7. Set the event to completed.
 8. Commit.
 
-The completion response includes `going_count` (eligible members with signup status `going`) and `reward_count` (newly written reward rows). Repeated completion requests return the already completed result with `reward_count` 0 and must not issue duplicate rewards. Enforce one signup reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
+The completion response includes `going_count` (eligible player members with signup status `going`) and `reward_count` (newly written reward rows). Repeated completion requests return the already completed result with `reward_count` 0 and must not issue duplicate rewards. Enforce one signup reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
 
-There is no Attendance upsert or post-completion attendance correction path. Captains complete events to settle signup rewards; coin clawback for rewards is not driven by attendance edits.
+There is no Attendance upsert or post-completion attendance correction path. Admins complete events to settle signup rewards; coin clawback for rewards is not driven by attendance edits.
 
 ### 6.2 Redemption
 
@@ -312,7 +310,7 @@ Deliver:
 - Organization and team reads.
 - Team create/update/archive.
 - Membership create/update/deactivate.
-- Team-scoped member/captain/admin authorization.
+- Team-scoped member/admin authorization.
 - Team homepage aggregate.
 
 Test:
@@ -329,7 +327,7 @@ Deliver:
 - Training and match draft creation.
 - MatchDetails validation.
 - Publish transition, update published events, and hard-delete uncompleted events.
-- Immediate notifications for publishing, modifying, and deleting published events.
+- Immediate notifications for created events.
 - Signup upsert and deadline enforcement.
 - Notification list and read state.
 
@@ -339,7 +337,7 @@ Test:
 - Match-only relationship tests.
 - not_going note validation.
 - Signup uniqueness and deadline tests.
-- Publish, update, and delete notification integration tests.
+- Create-event notification integration tests.
 - Hard-delete cascade and orphan-reference tests.
 
 ### Phase 3 — Match logs, signup board and completion
@@ -390,7 +388,7 @@ Deliver:
 
 Test:
 
-- Register → membership → publish event → signup → log match → complete → redeem.
+- Register → membership → create event notification → publish event → signup → log match → complete → redeem.
 - iOS and Android physical-device smoke tests.
 - Permission and transaction regression suites.
 - Basic load tests for team home, Inbox and live board.

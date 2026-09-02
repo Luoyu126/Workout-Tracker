@@ -19,7 +19,7 @@ release record.
   - Physical devices should use the computer or deployed backend LAN/HTTPS URL.
 - [ ] `EXPO_PUBLIC_API_BASE_URL` points at the target backend.
 - [ ] Supabase Auth is configured for the same project used by the build.
-- [ ] The test data includes at least one active team, one captain/admin account, one member account, one published match, coin rules, and one active store item.
+- [ ] The test data includes at least one active team, one admin account, one member account, one published match, coin rules, and one active store item.
 - [ ] For native push validation, `EXPO_PUBLIC_EAS_PROJECT_ID` is set to a real EAS project id, does not use a documentation placeholder value, and the build has the normal Expo/EAS APNs or FCM credentials.
 
 ## Test data preparation
@@ -30,7 +30,7 @@ does not seed persistent Supabase Auth users for a device build.
 
 Before starting the device smoke path:
 
-- [ ] Create or identify a Supabase Auth user for the captain/admin tester.
+- [ ] Create or identify a Supabase Auth user for the admin tester.
 - [ ] Export bootstrap variables for that admin user:
 
   ```bash
@@ -47,7 +47,7 @@ Before starting the device smoke path:
   ```
 
 - [ ] Start the target backend with Supabase JWT verification configured.
-- [ ] Sign in on the device as the captain/admin and confirm the bootstrapped team appears.
+- [ ] Sign in on the device as the admin and confirm the bootstrapped team appears.
 - [ ] Create or identify a second Supabase Auth user for the member tester.
 - [ ] Sign in once as the member tester so `/auth/sync` creates the app `User`.
 - [ ] Export member smoke variables:
@@ -64,9 +64,9 @@ Before starting the device smoke path:
   npm run backend:seed-device-smoke
   ```
 
-- [ ] Sign back in as captain/admin and confirm the member is active on the team.
-- [ ] As captain/admin, verify the smoke data:
-  - [ ] training, match, and late coin reward rules are active.
+- [ ] Sign back in as admin and confirm the member is active on the team.
+- [ ] As admin, verify the smoke data:
+  - [ ] training and match signup coin reward rules are active.
   - [ ] one fresh published training or match event is available for signup, even after rerunning the seed following a completed smoke event.
   - [ ] one fresh published match is available for live logging, even after rerunning the seed following a completed smoke match.
   - [ ] one active store item exists with a positive price and enough finite or unlimited stock.
@@ -93,27 +93,27 @@ Before starting the device smoke path:
 - [ ] Sign up or sign in with Supabase email/password.
 - [ ] If prompted, sync the user profile and confirm name, student ID, and avatar URL fields can be saved.
 - [ ] Open `我的球队` and confirm the expected active team is visible.
-- [ ] Open the team home and confirm member count, captains, upcoming events, signup summary, coin summary, and team logo/image surfaces render without crashing.
+- [ ] Open the team home and confirm member count, upcoming events, signup summary, coin summary, and team logo/image surfaces render without crashing.
 - [ ] Open team Inbox and confirm unread count/list load.
 - [ ] Register a native Expo Push Token or use the manual token fallback, then confirm the token appears saved.
-- [ ] As a captain/admin, publish a team announcement and confirm active team members receive an Inbox notification.
+- [ ] As an admin, publish a team announcement and confirm active team members receive an Inbox notification.
 - [ ] Open a published training or match event.
 - [ ] Complete event signup by submitting `参加`, `待定`, and `不参加` states; confirm `不参加` requires a reason.
 - [ ] Confirm signup is read-only after the effective signup deadline or once the event is completed.
-- [ ] As captain/admin, open a published match live board and add a goal, card, and substitution record.
+- [ ] As admin, open a published match live board and add a goal, card, and substitution record.
 - [ ] Confirm the live board refreshes and shows localized match log labels.
-- [ ] As captain/admin, delete a match log and confirm the destructive confirmation dialog appears before deletion.
+- [ ] As admin, delete a match log and confirm the destructive confirmation dialog appears before deletion.
 - [ ] As a member, reopen the same live board and confirm match logs are read-only.
-- [ ] As captain/admin, complete the published event and confirm signup rewards for `going` members; missing signups are treated as `maybe` and are not rewarded.
+- [ ] As admin, complete the published event and confirm signup rewards for `going` members; missing signups are treated as `maybe` and are not rewarded.
 - [ ] Confirm completed events cannot be edited or deleted from the event detail page.
 - [ ] Confirm there is no post-completion attendance correction path; use manual coin adjustment when negative balances are allowed.
 - [ ] Open the signup board and confirm completed-event rows and date filters load.
 - [ ] Open the coins screen and confirm balance, ledger, reward rules, member quick-select, and admin adjustment surfaces load.
-- [ ] As captain/admin, update training and match signup reward rule amounts.
+- [ ] As admin, update training and match signup reward rule amounts.
 - [ ] Open the store and confirm active items, item images, quantity input, and redemption history load.
 - [ ] Redeem an active item as a member and confirm coins are deducted and finite stock is reduced.
-- [ ] As captain/admin, fulfill the redemption and confirm the member receives a `redemption_completed` Inbox notification.
-- [ ] Refund a fulfilled redemption and confirm coins are restored and finite stock is restored.
+- [ ] As admin, fulfill the redemption and confirm the member receives a `redemption_completed` Inbox notification.
+- [ ] Refund a fulfilled redemption and confirm coins are restored while finite stock remains unchanged.
 - [ ] Kill and relaunch the app; confirm the persisted Supabase session and persisted language preference are restored.
 - [ ] Tap at least one actionable notification and confirm it deep-links to the expected event, team, coins, store, or Inbox screen.
 

@@ -2,7 +2,7 @@
 
 Mobile-first team management MVP for events, signup-based completion rewards, coin rewards, store redemptions, and notifications.
 
-The current implementation follows the product and architecture baseline in:
+The product and architecture baseline is documented in:
 
 - [database.md](database.md)
 - [requirements.md](requirements.md)
@@ -20,7 +20,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cd ..
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Start local Postgres:
@@ -62,9 +62,9 @@ npm run backend:seed-device-smoke
 ```
 
 The device smoke seed is idempotent. It reuses the bootstrapped team/admin,
-ensures the member tester has an active team membership, keeps training, match,
-and late reward rules active, creates or updates one published training, one
-published match, one active store item, and a member balance adjustment for
+ensures the member tester has an active team membership, keeps training and
+match signup reward rules active, creates or updates one published training,
+one published match, one active store item, and a member balance adjustment for
 store redemption testing. If earlier device smoke attempts spent the member's
 coins, rerunning the seed tops the member balance back up to 200 coins without
 creating duplicate seed-adjustment rows. If earlier smoke attempts completed
@@ -82,6 +82,24 @@ Mobile:
 ```bash
 npm run dev:mobile
 ```
+
+Local commands read `.env.local` by default. The remote configuration is kept
+in `.env.remote` and must be selected explicitly:
+
+```bash
+npm run dev:backend:remote
+npm run dev:mobile:remote
+npm run backend:migrate:remote
+```
+
+Both files are ignored by Git. Keep real passwords and API keys out of
+`.env.example` and source control. Use the remote migration command carefully,
+because it changes the remote database schema.
+
+The local file leaves Supabase Auth values blank. Fill in
+`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`
+when local mobile development needs real sign-in; the API and database can
+still remain local.
 
 ### Mobile API URL
 
@@ -112,8 +130,8 @@ HTTPS preview or production origins instead.
 Supabase Auth must be configured with the same project used by
 `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. The backend
 validates Supabase access tokens using either `SUPABASE_JWT_JWKS_URL` or
-`SUPABASE_JWT_SECRET` from `.env`; production startup fails if neither JWT
-verification setting is configured.
+`SUPABASE_JWT_SECRET` from the selected environment file; production startup
+fails if neither JWT verification setting is configured.
 
 For production or production-like previews, set `APP_ENV=production`. This
 disables FastAPI docs routes and requires `SUPABASE_JWT_SECRET` or
@@ -256,7 +274,7 @@ Release-candidate gate:
 3. Run `npm run security:audit` only in an environment where npm registry dependency metadata disclosure is approved.
 4. Install an EAS development, preview, or production build on at least one iOS device and one Android device.
 5. Run `npm run e2e:maestro:check`, then `npm run e2e:maestro` where supported, or manually execute the same smoke path documented in [e2e/maestro/README.md](e2e/maestro/README.md).
-6. For the final MVP release, complete [e2e/maestro/device-smoke-checklist.md](e2e/maestro/device-smoke-checklist.md) on both platforms and run `npm run e2e:device-report:create -- <candidate>` to create a gitignored report from [e2e/maestro/device-smoke-report-template.md](e2e/maestro/device-smoke-report-template.md) for the release record, confirming that login/sign-up, default Chinese UI, language switching, team navigation, Inbox, push permission/token registration, event signup, captain/admin match logging, member read-only live board access, event completion with signup rewards, coin balance, and store redemption surfaces open and behave correctly against the target backend.
+6. For the final MVP release, complete [e2e/maestro/device-smoke-checklist.md](e2e/maestro/device-smoke-checklist.md) on both platforms and run `npm run e2e:device-report:create -- <candidate>` to create a gitignored report from [e2e/maestro/device-smoke-report-template.md](e2e/maestro/device-smoke-report-template.md) for the release record, confirming that login/sign-up, default Chinese UI, language switching, team navigation, Inbox, push permission/token registration, member-only event signup, admin match logging, member read-only live board access, event completion with signup rewards, coin balance, and store redemption surfaces open and behave correctly against the target backend.
 7. After filling the report, run `npm run e2e:device-report:check -- e2e/maestro/device-smoke-report-YYYYMMDD-<candidate>.md` to catch missing platform pass rows for iOS/Android, final decision checkboxes, automated gate evidence, and core smoke-path notes before tagging.
 
 `npm run verify` proves the automated contract and business-rule baseline; the
@@ -267,14 +285,14 @@ iOS and Android device smoke runs prove store-build/runtime integration.
 Implemented slices:
 
 - Supabase email sign-up/sign-in/sign-out, backend user sync, and profile read/update APIs/UI.
-- Team membership, team-scoped roles, organization/team/member reads, active/archived team filters for reactivation, admin member-candidate search, real team-home aggregates, and captain/admin member management.
-- Mobile team-home screen for member count, upcoming events, captains, signup summary, coin summary, team logo editing, and team-scoped Inbox entry.
-- Events, matches, signup, list filters, captain-side create/publish/update/hard-delete flows, and create/publish/update/delete event notifications.
+- Team membership, team-scoped roles, organization/team/member reads, active/archived team filters for reactivation, admin member-candidate search, real team-home aggregates, and admin member management.
+- Mobile team-home screen for member count, upcoming events, signup summary, coin summary, team logo editing, and team-scoped Inbox entry.
+- Events, matches, signup, list filters, admin-side create/publish/update/hard-delete flows, and create-event notifications.
 - Event completion that settles `signup_reward` coins for `going` signups, team signup board, and configurable training/match signup coin rules.
-- Match logs with captain/admin-only goals/cards/substitutions, polling live board, member read-only live board access, log deletion, and match summary with signups.
-- Captain-side coin reward rule setup for training and match signup, plus admin manual coin adjustments with member quick-select and retry-safe client transaction IDs.
-- Store items with image URL preview/editing, captain-side item management, retry-safe client redemption IDs, redemptions, fulfillment, cancellation, refunds, and inventory restoration.
-- Inbox notifications, notification-tap deep links, event quick-signup actions, team-scoped unread filtering/counts, captain/admin team announcements, native Expo push token permission/registration, app-start/foreground token refresh, best-effort Expo remote push delivery, and device token deactivation.
+- Match logs with admin-only goals/cards/substitutions, polling live board, member read-only live board access, log deletion, and match summary with signups.
+- Admin-side coin reward rule setup for training and match signup, plus admin manual coin adjustments with member quick-select and retry-safe client transaction IDs.
+- Store items with image URL preview/editing, admin-side item management, retry-safe client redemption IDs, redemptions, fulfillment, cancellation, refunds, and inventory restoration.
+- Inbox notifications, notification-tap deep links, event quick-signup actions, team-scoped unread filtering/counts, admin team announcements, native Expo push token permission/registration, app-start/foreground token refresh, best-effort Expo remote push delivery, and device token deactivation.
 - Mobile-first Expo UI with default Simplified Chinese, keyboard-aware form layout, persisted language switching, persisted Supabase sessions, route coverage, EAS build profiles, media URL preview/editing, and form/input validation across auth/profile, teams/members, events, signup, coins, store, announcements, and device-token setup.
 - Mobile API client handling for empty 204 responses, FastAPI structured/string/validation error details, and network-failure/offline recovery prompts with retry actions.
 
@@ -290,11 +308,9 @@ while still persisting Inbox notifications. Push messages are chunked into
 batches of at most 100 messages per Expo Push API request. Tapping an Expo push
 notification opens the relevant event, team, coins, store, or Inbox screen based
 on the notification payload. The MVP persists device tokens and creates in-app notifications when events are
-created, published, updated, or deleted, when coin rewards/redemption completion
-occur, and when captains/admins publish team announcements. Draft creation
-notifications are stored as event snapshots without a detail link because draft
-events remain captain/admin-only; published-event notifications link to the
-event detail.
+created, when coin rewards/redemption completion occur, and when admins publish
+team announcements. Event notifications are not created for publish, update, or
+delete actions.
 Native store builds still need the normal Expo/EAS push credential setup for
 FCM/APNs delivery.
 
@@ -302,8 +318,8 @@ Backend demo flow:
 
 `npm run backend:demo-flow` exercises the main server-side MVP path with an
 in-memory database. It seeds team/users/media URLs, creates and publishes a
-training event, notifies the team, updates and hard-deletes a published event
-with event-updated and event-deleted notifications, creates and publishes a
+training event, notifies the team on creation, updates and hard-deletes a
+published event without extra activity notifications, creates and publishes a
 match, submits signup, logs and deletes match live-board entries, reads the live
 board, completes the match with a final score and signup rewards, completes
 training with signup rewards, redeems a store item with an image URL,

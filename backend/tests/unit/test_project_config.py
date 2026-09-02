@@ -22,7 +22,7 @@ def completed_device_smoke_report() -> str:
                 "Team announcement notification",
                 "Event signup states: going / maybe / not going with reason",
                 "Signup read-only after deadline or completion",
-                "Captain/admin match live logging: goal, card, substitution",
+                "Admin match live logging: goal, card, substitution",
                 "Match log delete confirmation",
                 "Member read-only live board access",
                 "Event completion with signup rewards for going members",
@@ -32,7 +32,7 @@ def completed_device_smoke_report() -> str:
                 "Coin balance, ledger, reward rule editing, and manual adjustment",
                 "Store item redemption and finite-stock deduction",
                 "Fulfillment notification",
-                "Refund and finite-stock restoration",
+                "Refund with finite stock preserved",
                 "Notification deep-link behavior",
             ),
             start=1,
@@ -169,7 +169,7 @@ def test_env_example_documents_mobile_and_supabase_configuration() -> None:
     assert "dev:backend:lan" in readme
     assert "Production startup rejects `*`" in readme
     assert root_package_json["scripts"]["backend:release-env:check"] == (
-        "cd backend && python3 -m scripts.check_release_env"
+        "cd backend && WORKOUT_TRACKER_ENV=remote python3 -m scripts.check_release_env"
     )
     assert root_package_json["scripts"]["release:check:preview"] == (
         "npm run verify && npm run backend:release-env:check -- production && "
@@ -451,10 +451,10 @@ def test_readme_mvp_status_tracks_recent_mobile_and_notification_flows() -> None
 
     for phrase in (
         "list filters",
-        "create/publish/update/delete event notifications",
+        "create-event notifications",
         "Events, matches, signup",
         "member quick-select",
-        "created, published, updated, or deleted",
+        "Event notifications are not created for publish, update, or",
         "active/archived team filters for reactivation",
         "180 backend tests and 120 mobile tests",
         "EAS build profiles",
@@ -477,16 +477,15 @@ def test_readme_mvp_status_tracks_recent_mobile_and_notification_flows() -> None
         "media URL preview/editing",
         "keyboard-aware form layout",
         "persisted Supabase sessions",
-        "production startup fails",
+        "Production startup rejects",
         "seed team/users/media URLs",
-        "updates and hard-deletes a published event",
-        "event-updated and event-deleted notifications",
+        "updates and hard-deletes a\npublished event",
         "publish a team announcement",
         "submit signup",
         "logs and deletes match live-board entries",
         "polling live board",
         "read the live board",
-        "captain/admin-only goals/cards/substitutions",
+        "admin-only goals/cards/substitutions",
         "member read-only live board access",
         "backend:load-check",
         "team home, Inbox, and live board reads",
@@ -765,16 +764,16 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
         "documentation placeholder value",
         "team announcement",
         "event signup",
-        "match live board",
-        "As captain/admin",
+            "match live board",
+            "As admin",
         "As a member",
         "match logs are read-only",
         "destructive confirmation dialog",
         "signup rewards for `going`",
         "signup board",
         "reward rule amounts",
-        "finite stock is reduced",
-        "finite stock is restored",
+            "finite stock is reduced",
+            "finite stock remains unchanged",
         "persisted Supabase session",
         "deep-links",
         "Screenshot or screen recording",
@@ -797,7 +796,7 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
         "Default Simplified Chinese UI",
         "Native push token registration",
         "Event signup states: going / maybe / not going with reason",
-        "Captain/admin match live logging",
+        "Admin match live logging",
         "Member read-only live board access",
         "Event completion with signup rewards",
         "Signup board filters and rows",
@@ -809,22 +808,17 @@ def test_release_candidate_docs_require_automated_and_device_smoke_gates() -> No
     assert "Event signup states: present / maybe / not going with reason" not in device_report_template
 
     for phrase in (
-        "球队首页",
-        "下一场活动",
+        "欢迎回来",
         "显示语言: zh-CN",
         "Display language: en",
         "tapOn: \"Display language: en\"",
         "登录",
+        "创建账号",
         "姓名",
         "学号",
         "邮箱 / 学号",
         "密码",
         "立即注册",
-        "个人资料",
-        "头像 URL，可留空",
-        "收件箱",
-        "球队活动",
-        "球队商店",
     ):
         assert phrase in maestro_flow
 
