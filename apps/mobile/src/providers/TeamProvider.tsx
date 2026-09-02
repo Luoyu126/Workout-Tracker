@@ -1,7 +1,8 @@
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 
 import { getMyTeams, getTeamHome, type MembershipRole, type Team, type TeamHome } from "@/features/teams/api";
+import { useAuth } from "@/providers/AuthProvider";
 
 const SELECTED_TEAM_KEY = "workout-tracker.selected-team-id";
 
@@ -39,17 +40,34 @@ async function writeSelectedTeamId(teamId: string | null) {
 }
 
 export function TeamProvider({ children }: PropsWithChildren) {
+  const { status: authStatus } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [home, setHome] = useState<TeamHome | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const requestVersionRef = useRef(0);
+
+  const reset = useCallback(() => {
+    setTeams([]);
+    setSelectedTeamId(null);
+    setHome(null);
+    setIsLoading(false);
+    setError(null);
+  }, []);
 
   const load = useCallback(async (preferredTeamId?: string | null) => {
+    if (authStatus !== "ready") {
+      return;
+    }
+    const requestVersion = ++requestVersionRef.current;
     setIsLoading(true);
     setError(null);
     try {
       const nextTeams = await getMyTeams({ status: "active" });
+      if (requestVersion !== requestVersionRef.current) {
+        return;
+      }
       setTeams(nextTeams);
       if (nextTeams.length === 0) {
         setSelectedTeamId(null);
@@ -60,35 +78,62 @@ export function TeamProvider({ children }: PropsWithChildren) {
       const storedId = preferredTeamId === undefined ? await readSelectedTeamId() : preferredTeamId;
       const nextSelected =
         (storedId && nextTeams.some((team) => team.id === storedId) ? storedId : null) ?? nextTeams[0].id;
+      if (requestVersion !== requestVersionRef.current) {
+        return;
+      }
       setSelectedTeamId(nextSelected);
       await writeSelectedTeamId(nextSelected);
-      setHome(await getTeamHome(nextSelected));
+      const nextHome = await getTeamHome(nextSelected);
+      if (requestVersion === requestVersionRef.current) {
+        setHome(nextHome);
+      }
     } catch (loadError) {
-      setHome(null);
-      setError(loadError);
+      if (requestVersion === requestVersionRef.current) {
+        setHome(null);
+        setError(loadError);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestVersion === requestVersionRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [authStatus]);
 
   const selectTeam = useCallback(async (teamId: string) => {
+    if (authStatus !== "ready") {
+      return;
+    }
+    const requestVersion = ++requestVersionRef.current;
     setIsLoading(true);
     setError(null);
     try {
       setSelectedTeamId(teamId);
       await writeSelectedTeamId(teamId);
-      setHome(await getTeamHome(teamId));
+      const nextHome = await getTeamHome(teamId);
+      if (requestVersion === requestVersionRef.current) {
+        setHome(nextHome);
+      }
     } catch (loadError) {
-      setHome(null);
-      setError(loadError);
+      if (requestVersion === requestVersionRef.current) {
+        setHome(null);
+        setError(loadError);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestVersion === requestVersionRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [authStatus]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (authStatus === "ready") {
+      void load();
+      return;
+    }
+    requestVersionRef.current += 1;
+    reset();
+    void writeSelectedTeamId(null);
+  }, [authStatus, load, reset]);
 
   const value = useMemo<TeamContextValue>(
     () => ({
