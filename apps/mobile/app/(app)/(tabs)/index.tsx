@@ -3,7 +3,7 @@ import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { CompactLanguageToggle, LanguageToggle } from "@/components/LanguageToggle";
+import { CompactLanguageToggle } from "@/components/LanguageToggle";
 import { ScreenState } from "@/components/ScreenState";
 import { Avatar, Badge, Button, Card, EmptyState, Screen } from "@/components/ui";
 import { getMySignup, updateMySignup, type SignupStatus } from "@/features/events/api";
@@ -218,15 +218,6 @@ export default function HomeScreen() {
         signInLabel={t("home.openLogin")}
       />
 
-      {!home && !isLoading ? (
-        <View style={styles.guestActions}>
-          <Link href="/login" asChild>
-            <Button label={t("home.openLogin")} />
-          </Link>
-          <LanguageToggle />
-        </View>
-      ) : null}
-
       <Modal animationType="fade" transparent visible={showTeamPicker} onRequestClose={() => setShowTeamPicker(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowTeamPicker(false)}>
           <View style={styles.modalCard}>
@@ -326,9 +317,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     marginTop: spacing.sm
-  },
-  guestActions: {
-    gap: spacing.sm
   },
   modalOverlay: {
     backgroundColor: colors.overlay,
