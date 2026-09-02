@@ -1,9 +1,17 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PLACEHOLDER_JWT_SECRETS = {"your-supabase-jwt-secret", "supabase-jwt-secret", "jwt-secret"}
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENV_PROFILE = os.getenv("WORKOUT_TRACKER_ENV", "local").strip().lower()
+if ENV_PROFILE not in {"local", "remote"}:
+    raise RuntimeError("WORKOUT_TRACKER_ENV must be 'local' or 'remote'")
+ENV_FILE = PROJECT_ROOT / f".env.{ENV_PROFILE}"
 
 
 class Settings(BaseSettings):
@@ -39,7 +47,7 @@ class Settings(BaseSettings):
         alias="CORS_ALLOWED_ORIGINS",
     )
 
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
     @staticmethod
     def _non_blank(value: str | None) -> str | None:
