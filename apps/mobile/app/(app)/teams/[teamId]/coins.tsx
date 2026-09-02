@@ -482,7 +482,7 @@ export default function TeamCoinsScreen() {
                 <Text style={styles.secondaryText}>{membership.user?.name ?? membership.user_id}</Text>
                 <Text style={styles.muted}>
                   {membership.jersey_number ? `#${membership.jersey_number} · ` : ""}
-                  {membership.position ?? membership.user?.email ?? membership.user_id}
+                  {membership.player_name ?? membership.user?.email ?? membership.user_id}
                 </Text>
               </View>
             </Pressable>

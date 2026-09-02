@@ -24,6 +24,24 @@ class DuplicateMembershipError(ConflictError):
         )
 
 
+class JoinRequestPendingError(ConflictError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="JOIN_REQUEST_PENDING",
+            message="Join request is already pending",
+            operation="teams.request_join",
+        )
+
+
+class AlreadyTeamMemberError(ConflictError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ALREADY_TEAM_MEMBER",
+            message="User is already an active team member",
+            operation="teams.request_join",
+        )
+
+
 class MemberNotEligibleError(BusinessRuleError):
     def __init__(self, message: str) -> None:
         super().__init__(code="MEMBER_NOT_ELIGIBLE", message=message, operation="teams.update_member")

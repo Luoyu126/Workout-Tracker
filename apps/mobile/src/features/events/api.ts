@@ -2,7 +2,7 @@ import { apiRequest } from "@/lib/api/client";
 import { generateClientUuid } from "@/lib/uuid";
 import { normalizeOptionalText, omitUndefined } from "@/lib/validation/text";
 
-export type EventStatus = "draft" | "published" | "completed" | "cancelled";
+export type EventStatus = "published" | "completed";
 export type EventType = "training" | "match" | "other";
 export type SignupStatus = "going" | "not_going" | "maybe";
 
@@ -26,8 +26,7 @@ export type TeamEvent = {
   description: string | null;
   location: string | null;
   start_time: string;
-  end_time: string | null;
-  signup_deadline: string | null;
+  end_time: string;
   status: EventStatus;
   created_by: string;
   created_at: string;
@@ -58,8 +57,7 @@ export type EventInput = {
   description?: string | null;
   location?: string | null;
   start_time: string;
-  end_time?: string | null;
-  signup_deadline?: string | null;
+  end_time: string;
 };
 
 export type MatchInput = {
@@ -115,8 +113,7 @@ export function createEvent(teamId: string, input: EventInput) {
       description: normalizeOptionalText(input.description),
       location: normalizeOptionalText(input.location),
       start_time: input.start_time,
-      end_time: input.end_time,
-      signup_deadline: input.signup_deadline
+      end_time: input.end_time
     })
   });
 }
@@ -132,8 +129,7 @@ export function createMatch(teamId: string, input: MatchInput) {
         description: normalizeOptionalText(input.event.description),
         location: normalizeOptionalText(input.event.location),
         start_time: input.event.start_time,
-        end_time: input.event.end_time,
-        signup_deadline: input.event.signup_deadline
+        end_time: input.event.end_time
       }),
       match_details: omitUndefined({
         opponent: input.match_details.opponent.trim(),
@@ -169,15 +165,8 @@ export function updateEvent(eventId: string, input: EventUpdateInput) {
       location: normalizeOptionalText(input.location),
       start_time: input.start_time,
       end_time: input.end_time,
-      signup_deadline: input.signup_deadline,
       match_details: matchDetails
     })
-  });
-}
-
-export function publishEvent(eventId: string) {
-  return apiRequest<TeamEvent>(`/api/v1/events/${eventId}/publish`, {
-    method: "POST"
   });
 }
 

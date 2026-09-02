@@ -34,27 +34,21 @@ describe("event input validation", () => {
     expect(
       isValidEventSchedule(
         "2026-08-16T12:00:00.000Z",
-        "2026-08-16T14:00:00.000Z",
-        "2026-08-16T12:00:00.000Z"
+        "2026-08-16T14:00:00.000Z"
       )
     ).toBe(true);
-    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", null, null)).toBe(true);
-    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", "2026-08-16T11:59:00.000Z", null)).toBe(false);
-    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", "2026-08-16T12:00:00.000Z", null)).toBe(false);
-    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", null, "2026-08-16T12:01:00.000Z")).toBe(false);
+    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", "2026-08-16T11:59:00.000Z")).toBe(false);
+    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", "2026-08-16T12:00:00.000Z")).toBe(false);
+    expect(isValidEventSchedule("2026-08-16T12:00:00.000Z", "not-a-date")).toBe(false);
   });
 
-  test("allows signup until the deadline and closes it afterwards", () => {
+  test("allows signup until the event starts and closes it afterwards", () => {
     const now = new Date("2026-08-16T12:00:00.000Z");
 
-    expect(isSignupOpen(null, "2026-08-16T12:00:00.000Z", now)).toBe(true);
-    expect(isSignupOpen(null, "2026-08-16T12:00:01.000Z", now)).toBe(true);
-    expect(isSignupOpen(null, "2026-08-16T11:59:59.999Z", now)).toBe(false);
-    expect(isSignupOpen("2026-08-16T12:00:00.000Z", "2026-08-17T12:00:00.000Z", now)).toBe(true);
-    expect(isSignupOpen("2026-08-16T12:00:01.000Z", "2026-08-17T12:00:00.000Z", now)).toBe(true);
-    expect(isSignupOpen("2026-08-16T11:59:59.999Z", "2026-08-17T12:00:00.000Z", now)).toBe(false);
-    expect(isSignupOpen("not-a-date", "2026-08-17T12:00:00.000Z", now)).toBe(false);
-    expect(isSignupOpen(null, "not-a-date", now)).toBe(false);
+    expect(isSignupOpen("2026-08-16T12:00:00.000Z", now)).toBe(true);
+    expect(isSignupOpen("2026-08-16T12:00:01.000Z", now)).toBe(true);
+    expect(isSignupOpen("2026-08-16T11:59:59.999Z", now)).toBe(false);
+    expect(isSignupOpen("not-a-date", now)).toBe(false);
   });
 
   test("accepts only strict non-negative integer scores", () => {

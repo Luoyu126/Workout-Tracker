@@ -16,27 +16,17 @@ export function parseOptionalIsoDateTime(value: string) {
   return value.trim().length > 0 ? parseIsoDateTime(value) : null;
 }
 
-export function isValidEventSchedule(
-  startTime: string,
-  endTime: string | null,
-  signupDeadline: string | null
-) {
+export function isValidEventSchedule(startTime: string, endTime: string) {
   const startTimestamp = Date.parse(startTime);
-  if (Number.isNaN(startTimestamp)) {
+  const endTimestamp = Date.parse(endTime);
+  if (Number.isNaN(startTimestamp) || Number.isNaN(endTimestamp)) {
     return false;
   }
-  if (endTime !== null && Date.parse(endTime) <= startTimestamp) {
-    return false;
-  }
-  if (signupDeadline !== null && Date.parse(signupDeadline) > startTimestamp) {
-    return false;
-  }
-  return true;
+  return endTimestamp > startTimestamp;
 }
 
-export function isSignupOpen(signupDeadline: string | null, startTime: string, now: Date = new Date()) {
-  const effectiveDeadline = signupDeadline ?? startTime;
-  const deadlineTimestamp = Date.parse(effectiveDeadline);
+export function isSignupOpen(startTime: string, now: Date = new Date()) {
+  const deadlineTimestamp = Date.parse(startTime);
   if (Number.isNaN(deadlineTimestamp)) {
     return false;
   }

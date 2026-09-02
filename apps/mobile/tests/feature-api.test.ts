@@ -43,6 +43,8 @@ describe("feature API contracts", () => {
       getMemberCandidates,
       getMyOrganizations,
       getMyTeams,
+      requestToJoinTeam,
+      searchTeams,
       getTeamHome,
       getTeamMember,
       getTeamMembers,
@@ -67,16 +69,18 @@ describe("feature API contracts", () => {
       user_id: " user-1 ",
       role: "member",
       jersey_number: " 9 ",
-      position: " 前锋 ",
+      player_name: " 小陈 ",
       status: "active"
     });
     updateTeamMember("team-1", "user-1", {
       role: "captain",
       jersey_number: "   ",
-      position: " 中场 ",
+      player_name: " 小李 ",
       status: "active",
       left_at: null
     });
+    searchTeams(" Falcons ", 15);
+    requestToJoinTeam("team-2");
 
     expect(apiRequestMock).toHaveBeenNthCalledWith(1, "/api/v1/organizations");
     expect(apiRequestMock).toHaveBeenNthCalledWith(2, "/api/v1/teams");
@@ -103,7 +107,7 @@ describe("feature API contracts", () => {
         user_id: "user-1",
         role: "member",
         jersey_number: "9",
-        position: "前锋",
+        player_name: "小陈",
         status: "active"
       }
     });
@@ -112,10 +116,17 @@ describe("feature API contracts", () => {
       body: {
         role: "captain",
         jersey_number: null,
-        position: "中场",
+        player_name: "小李",
         status: "active",
         left_at: null
       }
+    });
+    expect(apiRequestMock).toHaveBeenNthCalledWith(
+      11,
+      "/api/v1/teams/search?query=Falcons&limit=15"
+    );
+    expect(apiRequestMock).toHaveBeenNthCalledWith(12, "/api/v1/teams/team-2/join-requests", {
+      method: "POST"
     });
   });
 
@@ -134,7 +145,6 @@ describe("feature API contracts", () => {
       getEventSignups,
       getMySignup,
       getTeamEvents,
-      publishEvent,
       updateEvent,
       updateMySignup
     } = await import("../src/features/events/api");
@@ -144,8 +154,7 @@ describe("feature API contracts", () => {
       description: " 控球训练 ",
       location: "   ",
       start_time: "2026-08-16T19:00:00.000Z",
-      end_time: "2026-08-16T21:00:00.000Z",
-      signup_deadline: "2026-08-16T12:00:00.000Z"
+      end_time: "2026-08-16T21:00:00.000Z"
     };
 
     getTeamEvents("team-1");
@@ -173,7 +182,6 @@ describe("feature API contracts", () => {
         notes: " 赛后确认 "
       }
     });
-    publishEvent("event-1");
     deleteEvent("event-1");
     getMySignup("event-1");
     getEventSignups("event-1");
@@ -196,8 +204,7 @@ describe("feature API contracts", () => {
         description: "控球训练",
         location: null,
         start_time: "2026-08-16T19:00:00.000Z",
-        end_time: "2026-08-16T21:00:00.000Z",
-        signup_deadline: "2026-08-16T12:00:00.000Z"
+        end_time: "2026-08-16T21:00:00.000Z"
       }
     });
     expect(apiRequestMock).toHaveBeenNthCalledWith(4, "/api/v1/teams/team-1/matches", {
@@ -210,8 +217,7 @@ describe("feature API contracts", () => {
           description: "控球训练",
           location: null,
           start_time: "2026-08-16T19:00:00.000Z",
-          end_time: "2026-08-16T21:00:00.000Z",
-          signup_deadline: "2026-08-16T12:00:00.000Z"
+          end_time: "2026-08-16T21:00:00.000Z"
         },
         match_details: { opponent: "对手球队", notes: null }
       }
@@ -232,24 +238,21 @@ describe("feature API contracts", () => {
         }
       }
     });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(7, "/api/v1/events/event-1/publish", {
-      method: "POST"
-    });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(8, "/api/v1/events/event-1", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(7, "/api/v1/events/event-1", {
       method: "DELETE"
     });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(9, "/api/v1/events/event-1/signup");
-    expect(apiRequestMock).toHaveBeenNthCalledWith(10, "/api/v1/events/event-1/signups");
-    expect(apiRequestMock).toHaveBeenNthCalledWith(11, "/api/v1/events/event-1/signups?status=going");
-    expect(apiRequestMock).toHaveBeenNthCalledWith(12, "/api/v1/events/event-1/signup", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(8, "/api/v1/events/event-1/signup");
+    expect(apiRequestMock).toHaveBeenNthCalledWith(9, "/api/v1/events/event-1/signups");
+    expect(apiRequestMock).toHaveBeenNthCalledWith(10, "/api/v1/events/event-1/signups?status=going");
+    expect(apiRequestMock).toHaveBeenNthCalledWith(11, "/api/v1/events/event-1/signup", {
       method: "PUT",
       body: { status: "going", note: null }
     });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(13, "/api/v1/events/event-1/signup", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(12, "/api/v1/events/event-1/signup", {
       method: "PUT",
       body: { status: "not_going", note: null }
     });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(14, "/api/v1/events/event-1/signup", {
+    expect(apiRequestMock).toHaveBeenNthCalledWith(13, "/api/v1/events/event-1/signup", {
       method: "PUT",
       body: { status: "not_going", note: "受伤" }
     });

@@ -32,6 +32,8 @@ const zhMessages: Partial<Record<TranslationKey, string>> = {
   "common.invalidResponse": "服务器响应异常，请稍后重试",
   "common.notFound": "未找到相关资源，请刷新后重试",
   "common.stateConflict": "当前状态不允许执行此操作，请刷新后重试",
+  "common.alreadyTeamMember": "您已经加入该球队",
+  "common.joinRequestPending": "您对该球队的申请正在审核中",
   "common.lastAdminRequired": "球队至少需要保留一名有效管理员",
   "common.insufficientCoins": "金币余额不足",
   "common.insufficientStock": "库存不足",
@@ -80,6 +82,12 @@ describe("formatApiError", () => {
     );
     expect(formatApiError(new TestApiError("Team must keep one active admin", 409, "LAST_ADMIN_REQUIRED"), zh)).toBe(
       "球队至少需要保留一名有效管理员"
+    );
+    expect(formatApiError(new TestApiError("Join request is already pending", 409, "JOIN_REQUEST_PENDING"), zh)).toBe(
+      "您对该球队的申请正在审核中"
+    );
+    expect(formatApiError(new TestApiError("User is already an active team member", 409, "ALREADY_TEAM_MEMBER"), zh)).toBe(
+      "您已经加入该球队"
     );
     expect(formatApiError(new TestApiError("Only draft events can be published", 409, "EVENT_STATE_CONFLICT"), zh)).toBe(
       "当前状态不允许执行此操作，请刷新后重试"

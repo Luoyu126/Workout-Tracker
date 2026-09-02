@@ -410,13 +410,48 @@ GET /api/v1/teams
 
 支持 status 过滤，默认只返回 active 球队。
 
-### 7.3 创建球队（后续能力）
+### 7.3 搜索球队
+
+GET /api/v1/teams/search
+
+仅限已登录用户。按球队名称执行不区分大小写的模糊搜索，只返回 `status=active` 的球队。搜索词去除首尾空白后少于 2 个字符时返回空列表。`limit` 默认 20，最小 1，最大 50。
+
+响应不包含球队成员或其他私有数据，每项为：
+
+~~~json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440050",
+  "name": "Falcons Football",
+  "description": "Open training team",
+  "logo_url": "https://...",
+  "organization_name": "University Club",
+  "membership_status": "pending"
+}
+~~~
+
+`membership_status` 是当前用户与该球队现有唯一 `TeamMembership` 的状态，可以为 `active`、`inactive`、`pending` 或 `null`。该字段仅用于显示当前用户自己的申请/成员状态，不授予球队访问权限。
+
+### 7.4 提交入队申请
+
+POST /api/v1/teams/{team_id}/join-requests
+
+仅限已登录用户，不接收请求体：
+
+- 尚无成员关系时，创建 `role=member`、`status=pending` 的 `TeamMembership`。
+- 已有 `inactive` 关系时复用原记录，重置为 `role=member`、`status=pending`，并清空 `joined_at` 和 `left_at`。
+- 已有 `pending` 关系时返回 409 `JOIN_REQUEST_PENDING`。
+- 已有 `active` 关系时返回 409 `ALREADY_TEAM_MEMBER`。
+- 球队不存在或已经归档时返回 404 `TEAM_RESOURCE_NOT_FOUND`。
+
+成功时返回 `MembershipRead`。申请写入在单一事务中锁定球队和现有成员关系，并继续依赖 `(team_id, user_id)` 唯一约束防止并发重复记录。`pending` 不代表已加入球队，不能访问球队私有内容或执行球队业务操作。
+
+### 7.5 创建球队（后续能力）
 
 MVP 不提供公开创建球队 API。部署初始化脚本创建首个 Team，并在同一事务中为初始用户创建 role=admin、status=active 的 TeamMembership。
 
 后续多球队创建会作为组织级管理能力单独设计；当前移动端和 OpenAPI 客户端不应依赖 `POST /api/v1/organizations/{organization_id}/teams`。
 
-### 7.4 球队主页
+### 7.6 球队主页
 
 GET /api/v1/teams/{team_id}/home
 
@@ -429,25 +464,25 @@ GET /api/v1/teams/{team_id}/home
 - signup_summary：已完成活动上 EventSignup 的聚合，形如 `{going, maybe, not_going, total}`。
 - coin_summary：CoinTransaction 聚合。
 
-### 7.5 球队详情
+### 7.7 球队详情
 
 GET /api/v1/teams/{team_id}
 
 返回 Team 基础字段。当前用户必须是该球队 active 成员，且球队必须为 active。
 
-### 7.6 更新球队
+### 7.8 更新球队
 
 PATCH /api/v1/teams/{team_id}
 
 仅 admin 可更新 name、description、logo_url 和 status。
 
-### 7.7 成员列表
+### 7.9 成员列表
 
 GET /api/v1/teams/{team_id}/members
 
 支持 role 和 status 过滤。
 
-### 7.8 可添加成员候选
+### 7.10 可添加成员候选
 
 GET /api/v1/teams/{team_id}/member-candidates
 
@@ -458,7 +493,7 @@ GET /api/v1/teams/{team_id}/member-candidates
 - query：搜索关键词。
 - limit：返回数量，默认 10，最大 25。
 
-### 7.9 添加成员
+### 7.11 添加成员
 
 POST /api/v1/teams/{team_id}/members
 
@@ -476,11 +511,11 @@ POST /api/v1/teams/{team_id}/members
 
 user_id 必须对应已经同步且 status=active 的 User；disabled 用户即使知道 UUID 也不能被直接添加为球队成员。
 
-### 7.10 成员详情
+### 7.12 成员详情
 
 GET /api/v1/teams/{team_id}/members/{user_id}
 
-### 7.11 更新成员
+### 7.13 更新成员
 
 PATCH /api/v1/teams/{team_id}/members/{user_id}
 

@@ -21,7 +21,7 @@ import { colors } from "@/theme/colors";
 
 type MemberDraft = {
   jersey_number: string;
-  position: string;
+  player_name: string;
 };
 
 export default function TeamMembersScreen() {
@@ -30,7 +30,7 @@ export default function TeamMembersScreen() {
   const [members, setMembers] = useState<Membership[]>([]);
   const [newUserId, setNewUserId] = useState("");
   const [newJerseyNumber, setNewJerseyNumber] = useState("");
-  const [newPosition, setNewPosition] = useState("");
+  const [newPlayerName, setNewPlayerName] = useState("");
   const [newRole, setNewRole] = useState<MembershipRole>("member");
   const [candidateQuery, setCandidateQuery] = useState("");
   const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
@@ -50,7 +50,7 @@ export default function TeamMembersScreen() {
           membership.user_id,
           {
             jersey_number: membership.jersey_number ?? "",
-            position: membership.position ?? ""
+            player_name: membership.player_name ?? ""
           }
         ])
       )
@@ -110,7 +110,7 @@ export default function TeamMembersScreen() {
         user_id: normalizedUserId,
         role: newRole,
         jersey_number: normalizeOptionalTeamText(newJerseyNumber),
-        position: normalizeOptionalTeamText(newPosition),
+        player_name: normalizeOptionalTeamText(newPlayerName),
         status: "active"
       });
       await loadMembers(filterRole, filterStatus);
@@ -186,7 +186,7 @@ export default function TeamMembersScreen() {
       ...currentDrafts,
       [userId]: {
         jersey_number: currentDrafts[userId]?.jersey_number ?? "",
-        position: currentDrafts[userId]?.position ?? "",
+        player_name: currentDrafts[userId]?.player_name ?? "",
         ...patch
       }
     }));
@@ -195,11 +195,11 @@ export default function TeamMembersScreen() {
   function handleSaveMemberProfile(membership: Membership) {
     const draft = memberDrafts[membership.user_id] ?? {
       jersey_number: membership.jersey_number ?? "",
-      position: membership.position ?? ""
+      player_name: membership.player_name ?? ""
     };
     void handleUpdateMember(membership, {
       jersey_number: normalizeOptionalTeamText(draft.jersey_number),
-      position: normalizeOptionalTeamText(draft.position)
+      player_name: normalizeOptionalTeamText(draft.player_name)
     });
   }
 
@@ -311,11 +311,11 @@ export default function TeamMembersScreen() {
             value={newJerseyNumber}
           />
           <TextInput
-            onChangeText={setNewPosition}
-            placeholder={t("members.position")}
+            onChangeText={setNewPlayerName}
+            placeholder={t("members.playerName")}
             placeholderTextColor={colors.muted}
             style={[styles.input, styles.rowInput]}
-            value={newPosition}
+            value={newPlayerName}
           />
         </View>
         <Pressable
@@ -388,7 +388,7 @@ export default function TeamMembersScreen() {
           {membership.jersey_number ? (
             <Text style={styles.muted}>#{membership.jersey_number}</Text>
           ) : null}
-          {membership.position ? <Text style={styles.muted}>{membership.position}</Text> : null}
+          {membership.player_name ? <Text style={styles.muted}>{membership.player_name}</Text> : null}
           {canManageMembers ? (
             <>
               <View style={styles.row}>
@@ -401,11 +401,11 @@ export default function TeamMembersScreen() {
                   value={memberDrafts[membership.user_id]?.jersey_number ?? membership.jersey_number ?? ""}
                 />
                 <TextInput
-                  onChangeText={(value) => setMemberDraft(membership.user_id, { position: value })}
-                  placeholder={t("members.position")}
+                  onChangeText={(value) => setMemberDraft(membership.user_id, { player_name: value })}
+                  placeholder={t("members.playerName")}
                   placeholderTextColor={colors.muted}
                   style={[styles.input, styles.rowInput]}
-                  value={memberDrafts[membership.user_id]?.position ?? membership.position ?? ""}
+                  value={memberDrafts[membership.user_id]?.player_name ?? membership.player_name ?? ""}
                 />
               </View>
               <Pressable

@@ -151,6 +151,16 @@ def test_repositories_preserve_active_filters_and_for_update_locks(session: Sess
     store_statement = mocked_session.scalar.call_args.args[0]
     assert "FOR UPDATE" in str(store_statement.compile(dialect=postgresql.dialect()))
 
+    mocked_session.reset_mock()
+    team_repository.get_team_for_update(mocked_session, uuid4())
+    team_statement = mocked_session.scalar.call_args.args[0]
+    assert "FOR UPDATE" in str(team_statement.compile(dialect=postgresql.dialect()))
+
+    mocked_session.reset_mock()
+    team_repository.find_membership_for_update(mocked_session, uuid4(), uuid4())
+    membership_statement = mocked_session.scalar.call_args.args[0]
+    assert "FOR UPDATE" in str(membership_statement.compile(dialect=postgresql.dialect()))
+
 
 def test_application_service_rolls_back_when_domain_helper_fails(
     session: Session,

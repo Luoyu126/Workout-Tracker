@@ -35,7 +35,6 @@ export default function TeamEventsScreen() {
   const [location, setLocation] = useState("");
   const [startTime, setStartTime] = useState(getDefaultStartTime());
   const [endTime, setEndTime] = useState("");
-  const [signupDeadline, setSignupDeadline] = useState("");
   const [opponent, setOpponent] = useState("");
   const [matchNotes, setMatchNotes] = useState("");
   const [createdEvent, setCreatedEvent] = useState<TeamEvent | null>(null);
@@ -108,18 +107,16 @@ export default function TeamEventsScreen() {
       return;
     }
     const parsedStartTime = parseIsoDateTime(startTime);
-    const parsedEndTime = parseOptionalIsoDateTime(endTime);
-    const parsedSignupDeadline = parseOptionalIsoDateTime(signupDeadline);
+    const parsedEndTime = parseIsoDateTime(endTime);
     if (
       title.trim().length === 0 ||
       parsedStartTime === null ||
-      (endTime.trim().length > 0 && parsedEndTime === null) ||
-      (signupDeadline.trim().length > 0 && parsedSignupDeadline === null)
+      parsedEndTime === null
     ) {
       setMessage(t("events.invalidEventInput"));
       return;
     }
-    if (!isValidEventSchedule(parsedStartTime, parsedEndTime, parsedSignupDeadline)) {
+    if (!isValidEventSchedule(parsedStartTime, parsedEndTime)) {
       setMessage(t("events.invalidSchedule"));
       return;
     }
@@ -136,8 +133,7 @@ export default function TeamEventsScreen() {
         description: description.trim().length > 0 ? description.trim() : null,
         location: location.trim().length > 0 ? location.trim() : null,
         start_time: parsedStartTime,
-        end_time: parsedEndTime,
-        signup_deadline: parsedSignupDeadline
+        end_time: parsedEndTime
       };
       const createdEvent =
         eventType === "match"
@@ -156,7 +152,6 @@ export default function TeamEventsScreen() {
       setLocation("");
       setStartTime(getDefaultStartTime());
       setEndTime("");
-      setSignupDeadline("");
       setOpponent("");
       setMatchNotes("");
       setMessage(t("events.created"));
@@ -270,15 +265,6 @@ export default function TeamEventsScreen() {
           style={styles.input}
           value={endTime}
         />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setSignupDeadline}
-          placeholder={t("events.signupDeadline")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={signupDeadline}
-        />
         {eventType === "match" ? (
           <>
             <TextInput
@@ -305,7 +291,7 @@ export default function TeamEventsScreen() {
           onPress={handleCreateEvent}
           style={[styles.button, isLoading && styles.disabled]}
         >
-          <Text style={styles.buttonText}>{t("events.createDraft")}</Text>
+          <Text style={styles.buttonText}>{t("events.create")}</Text>
         </Pressable>
         </View>
       ) : null}
@@ -351,7 +337,7 @@ export default function TeamEventsScreen() {
           ))}
         </View>
         <View style={styles.actions}>
-          {([null, "draft", "published", "completed"] as const).map((status) => (
+          {([null, "published", "completed"] as const).map((status) => (
             <Pressable
               accessibilityRole="button"
               disabled={isLoading}

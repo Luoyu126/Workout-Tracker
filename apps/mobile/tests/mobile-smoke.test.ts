@@ -16,6 +16,7 @@ const requiredRoutes = [
   "app/login.tsx",
   "app/(app)/(tabs)/profile.tsx",
   "app/(app)/teams.tsx",
+  "app/(app)/teams/join.tsx",
   "app/(app)/(tabs)/inbox.tsx",
   "app/(app)/teams/[teamId]/index.tsx",
   "app/(app)/teams/[teamId]/members.tsx",
@@ -73,6 +74,22 @@ describe("mobile MVP smoke", () => {
     expect(requiredRoutes.map((route) => [route, existsSync(resolve(appRoot, route))])).toEqual(
       requiredRoutes.map((route) => [route, true])
     );
+  });
+
+  test("team join request flow is reachable from the events empty state", () => {
+    const eventsSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/events.tsx"), "utf-8");
+    const joinSource = readFileSync(resolve(appRoot, "app/(app)/teams/join.tsx"), "utf-8");
+
+    expect(eventsSource).toContain('router.push("/teams/join")');
+    expect(eventsSource).toContain('t("teams.requestToJoin")');
+    expect(joinSource).toContain("normalizeTeamSearchQuery");
+    expect(joinSource).toContain("searchTeams(normalizedQuery)");
+    expect(joinSource).toContain("requestToJoinTeam(teamId)");
+    expect(joinSource).toContain('membership_status: "pending"');
+    expect(joinSource).toContain('team.membership_status === "pending"');
+    expect(joinSource).toContain('team.membership_status === "active"');
+    expect(joinSource).toContain("applyingTeamIds.has(team.id)");
+    expect(joinSource).toContain('messageTone={messageTone}');
   });
 
   test("core list screens use shared loading, empty, error and retry state UI", () => {
@@ -441,7 +458,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("events.signupNoteRequired");
     expect(source).toContain("canUpdateSignup");
     expect(source).toContain('event?.status === "published"');
-    expect(source).toContain("isSignupOpen(event.signup_deadline, event.start_time)");
+    expect(source).toContain("isSignupOpen(event.start_time)");
     expect(source).toContain("events.signupReadonly");
     expect(functionBody(source, "handleSubmitSignup")).toContain("if (!canUpdateSignup)");
     expect(functionBody(source, "handleSubmitSignup")).toContain('showError(t("events.signupReadonly"))');
@@ -473,7 +490,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("canManageEventStatus");
     expect(source).toContain("canManageEventRole");
     expect(source).toContain('currentRole === "captain" || currentRole === "admin"');
-    expect(source).toContain('event?.status === "draft" || event?.status === "published"');
+    expect(source).toContain('event?.status === "published"');
     expect(source).toContain("events.manageReadonly");
     expect(source).toContain("events.captainOnlyHint");
     expect(source).toContain("if (!canManageEventRole)");
@@ -493,13 +510,13 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("editDescription");
     expect(source).toContain("editStartTime");
     expect(source).toContain("editEndTime");
-    expect(source).toContain("editSignupDeadline");
     expect(source).toContain("editMatchResult === result && styles.activeButton");
     expect(source).toContain("isLoading && styles.disabled");
     expect(source).toContain("autoCorrect={false}");
     expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
     expect(source).toContain("style={[styles.dangerButton, isLoading && styles.disabled]}");
-    expect(source).toContain("signup_deadline: parsedSignupDeadline");
+    expect(source).toContain("end_time: parsedEndTime");
+    expect(source).not.toContain("signup_deadline");
     expect(source).toContain("setEvent(null)");
     expect(source).toContain("useRouter");
     expect(source).toContain("const deletedTeamId = event?.team_id ?? null;");
@@ -516,13 +533,12 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("canCompleteEvent");
   });
 
-  test("event creation exposes scheduling, signup deadline and match notes fields", () => {
+  test("event creation exposes scheduling and match notes fields", () => {
     const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events.tsx"), "utf-8");
     const validationSource = readFileSync(resolve(appRoot, "src/features/events/validation.ts"), "utf-8");
 
     expect(source).toContain("events.description");
     expect(source).toContain("events.endTime");
-    expect(source).toContain("events.signupDeadline");
     expect(source).toContain("events.matchNotes");
     expect(source).toContain("getTeamHome");
     expect(source).toContain("currentRole");
@@ -551,7 +567,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("startsBefore");
     expect(source).toContain("events.filters");
     expect(source).toContain("events.captainOnlyHint");
-    expect(source).toContain("signup_deadline");
+    expect(source).not.toContain("signup_deadline");
     expect(source).toContain("end_time");
     expect(source).toContain("parseIsoDateTime");
     expect(source).toContain("parseOptionalIsoDateTime");
@@ -570,7 +586,6 @@ describe("mobile MVP smoke", () => {
     for (const key of [
       "events.startTime",
       "events.endTime",
-      "events.signupDeadline",
       "events.startsAfter",
       "events.startsBefore"
     ]) {
@@ -582,7 +597,6 @@ describe("mobile MVP smoke", () => {
     expect(functionBody(source, "handleCreateEvent")).toContain('setLocation("");');
     expect(functionBody(source, "handleCreateEvent")).toContain("setStartTime(getDefaultStartTime());");
     expect(functionBody(source, "handleCreateEvent")).toContain('setEndTime("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain('setSignupDeadline("");');
     expect(functionBody(source, "handleCreateEvent")).toContain('setOpponent("");');
     expect(functionBody(source, "handleCreateEvent")).toContain('setMatchNotes("");');
     expect(source).not.toContain('useState("周末训练")');
@@ -856,7 +870,7 @@ describe("mobile MVP smoke", () => {
     expect(source).not.toContain('useState("训练队服兑换")');
   });
 
-  test("members screen supports editable jersey and position profiles", () => {
+  test("members screen supports editable jersey and player name profiles", () => {
     const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/members.tsx"), "utf-8");
 
     expect(source).toContain("memberDrafts");
@@ -896,7 +910,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("members.invalidUserId");
     expect(source).toContain("normalizeOptionalTeamText");
     expect(source).toContain("jersey_number");
-    expect(source).toContain("position");
+    expect(source).toContain("player_name");
     expect(source).toContain("filterRole");
     expect(source).toContain("filterStatus");
     expect(source).toContain("members.filters");

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   normalizeMemberUserId,
   normalizeOptionalTeamText,
+  normalizeTeamSearchQuery,
   normalizeTeamName
 } from "../src/features/teams/validation";
 
@@ -23,5 +24,11 @@ describe("team input validation", () => {
       "550e8400-e29b-41d4-a716-446655440000"
     );
     expect(normalizeMemberUserId("user-1")).toBeNull();
+  });
+
+  test("normalizes team search queries with a two-character minimum", () => {
+    expect(normalizeTeamSearchQuery("  FC  ")).toBe("FC");
+    expect(normalizeTeamSearchQuery(" F ")).toBeNull();
+    expect(normalizeTeamSearchQuery("   ")).toBeNull();
   });
 });

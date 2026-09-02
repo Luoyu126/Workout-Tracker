@@ -208,13 +208,13 @@ export default function TeamHomeScreen() {
             </Text>
           </View>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t("teamHome.captains")}</Text>
-            {home.captains.length === 0 ? (
-              <Text style={styles.muted}>{t("teamHome.noCaptains")}</Text>
+            <Text style={styles.cardTitle}>{t("teamHome.admins")}</Text>
+            {home.admins.length === 0 ? (
+              <Text style={styles.muted}>{t("teamHome.noAdmins")}</Text>
             ) : (
-              home.captains.map((captain) => (
-                <Text key={captain.id} style={styles.muted}>
-                  {captain.user?.name ?? captain.user_id}
+              home.admins.map((admin) => (
+                <Text key={admin.id} style={styles.muted}>
+                  {admin.user?.name ?? admin.user_id}
                 </Text>
               ))
             )}

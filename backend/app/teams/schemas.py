@@ -20,6 +20,15 @@ class TeamRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TeamSearchResultRead(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    logo_url: str | None
+    organization_name: str
+    membership_status: MembershipStatus | None
+
+
 class TeamUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = None

@@ -16,6 +16,7 @@ from app.teams.schemas import (
     SignupBoardRow,
     TeamHomeRead,
     TeamRead,
+    TeamSearchResultRead,
     TeamUpdateRequest,
 )
 from app.teams.service import (
@@ -26,6 +27,8 @@ from app.teams.service import (
     list_member_candidates,
     list_members,
     list_my_teams,
+    request_to_join_team,
+    search_teams,
     signup_board,
     update_member,
     update_team,
@@ -41,6 +44,25 @@ def read_my_teams(
     session: Session = Depends(get_db),
 ) -> list[Team]:
     return list_my_teams(session, user, status_filter)
+
+
+@router.get("/teams/search", response_model=list[TeamSearchResultRead])
+def read_team_search(
+    query: str = Query(default="", min_length=0, max_length=120),
+    limit: int = Query(default=20, ge=1, le=50),
+    user: User = Depends(current_user),
+    session: Session = Depends(get_db),
+) -> list[TeamSearchResultRead]:
+    return search_teams(session, user, query, limit)
+
+
+@router.post("/teams/{team_id}/join-requests", response_model=MembershipRead)
+def post_join_request(
+    team_id: UUID,
+    user: User = Depends(current_user),
+    session: Session = Depends(get_db),
+) -> TeamMembership:
+    return request_to_join_team(session, team_id, user)
 
 
 @router.get("/teams/{team_id}/home", response_model=TeamHomeRead)

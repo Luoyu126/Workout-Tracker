@@ -13,7 +13,7 @@ import {
   type EventType,
   type TeamEvent
 } from "@/features/events/api";
-import { isValidEventSchedule, parseIsoDateTime, parseOptionalIsoDateTime } from "@/features/events/validation";
+import { isValidEventSchedule, parseIsoDateTime } from "@/features/events/validation";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
@@ -39,7 +39,6 @@ export default function EventsTabScreen() {
   const [location, setLocation] = useState("");
   const [startTime, setStartTime] = useState(getDefaultStartTime());
   const [endTime, setEndTime] = useState("");
-  const [signupDeadline, setSignupDeadline] = useState("");
   const [opponent, setOpponent] = useState("");
   const [matchNotes, setMatchNotes] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -55,7 +54,7 @@ export default function EventsTabScreen() {
     try {
       const nextEvents = await getTeamEvents(selectedTeamId, {
         type: filterType,
-        status: canManageEvents ? filterStatus : filterStatus === "draft" ? "published" : filterStatus
+        status: filterStatus
       });
       setEvents(nextEvents);
       if (nextEvents.length === 0) {
@@ -78,18 +77,16 @@ export default function EventsTabScreen() {
       return;
     }
     const parsedStartTime = parseIsoDateTime(startTime);
-    const parsedEndTime = parseOptionalIsoDateTime(endTime);
-    const parsedSignupDeadline = parseOptionalIsoDateTime(signupDeadline);
+    const parsedEndTime = parseIsoDateTime(endTime);
     if (
       title.trim().length === 0 ||
       parsedStartTime === null ||
-      (endTime.trim().length > 0 && parsedEndTime === null) ||
-      (signupDeadline.trim().length > 0 && parsedSignupDeadline === null)
+      parsedEndTime === null
     ) {
       setMessage(t("events.invalidEventInput"));
       return;
     }
-    if (!isValidEventSchedule(parsedStartTime, parsedEndTime, parsedSignupDeadline)) {
+    if (!isValidEventSchedule(parsedStartTime, parsedEndTime)) {
       setMessage(t("events.invalidSchedule"));
       return;
     }
@@ -106,8 +103,7 @@ export default function EventsTabScreen() {
         description: description.trim().length > 0 ? description.trim() : null,
         location: location.trim().length > 0 ? location.trim() : null,
         start_time: parsedStartTime,
-        end_time: parsedEndTime,
-        signup_deadline: parsedSignupDeadline
+        end_time: parsedEndTime
       };
       const created =
         eventType === "match"
@@ -124,7 +120,6 @@ export default function EventsTabScreen() {
       setLocation("");
       setStartTime(getDefaultStartTime());
       setEndTime("");
-      setSignupDeadline("");
       setOpponent("");
       setMatchNotes("");
       setShowCreate(false);
@@ -153,7 +148,13 @@ export default function EventsTabScreen() {
         ) : null
       }
     >
-      {!selectedTeamId ? <EmptyState title={t("teams.noTeams")} actionLabel={t("home.openLogin")} onAction={() => router.push("/login")} /> : null}
+      {!selectedTeamId ? (
+        <EmptyState
+          title={t("teams.noTeams")}
+          actionLabel={t("teams.requestToJoin")}
+          onAction={() => router.push("/teams/join")}
+        />
+      ) : null}
 
       <SegmentedControl
         value={filterType}
@@ -170,7 +171,6 @@ export default function EventsTabScreen() {
           onChange={setFilterStatus}
           options={[
             { value: null, label: t("events.allStatuses") },
-            { value: "draft", label: t("events.status.draft") },
             { value: "published", label: t("events.status.published") },
             { value: "completed", label: t("events.status.completed") }
           ]}
@@ -205,20 +205,13 @@ export default function EventsTabScreen() {
             onChangeText={setEndTime}
             value={endTime}
           />
-          <TextField
-            autoCapitalize="none"
-            autoCorrect={false}
-            label={t("events.signupDeadline")}
-            onChangeText={setSignupDeadline}
-            value={signupDeadline}
-          />
           {eventType === "match" ? (
             <>
               <TextField autoCorrect={false} label={t("events.opponent")} onChangeText={setOpponent} value={opponent} />
               <TextField label={t("events.matchNotes")} multiline onChangeText={setMatchNotes} value={matchNotes} />
             </>
           ) : null}
-          <Button disabled={isLoading} label={t("events.createDraft")} onPress={() => void handleCreateEvent()} />
+          <Button disabled={isLoading} label={t("events.create")} onPress={() => void handleCreateEvent()} />
         </Card>
       ) : null}
 
@@ -244,7 +237,7 @@ export default function EventsTabScreen() {
                 label={t(`events.${event.type}`)}
                 tone={event.type === "match" ? "purple" : "accent"}
               />
-              <Badge label={t(`events.status.${event.status}`)} tone={event.status === "draft" ? "warning" : "muted"} />
+              <Badge label={t(`events.status.${event.status}`)} tone="muted" />
             </View>
             <Text style={styles.cardTitle}>{event.title}</Text>
             <Text style={styles.muted}>{new Date(event.start_time).toLocaleString()}</Text>

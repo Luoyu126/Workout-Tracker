@@ -146,11 +146,11 @@ export default function ProfileTabScreen() {
         ) : null}
         {profile?.email ? <Text style={styles.meta}>{profile.email}</Text> : null}
         <View style={styles.tags}>
-          {home?.current_membership.jersey_number || home?.current_membership.position ? (
+          {home?.current_membership.jersey_number || home?.current_membership.player_name ? (
             <Badge
               tone="gold"
               label={`#${home.current_membership.jersey_number ?? "-"}${
-                home.current_membership.position ? ` ${home.current_membership.position}` : ""
+                home.current_membership.player_name ? ` ${home.current_membership.player_name}` : ""
               }`}
             />
           ) : null}

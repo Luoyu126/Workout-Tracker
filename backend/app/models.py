@@ -74,6 +74,14 @@ class Organization(Base, TimestampMixin):
 
 class Team(Base, TimestampMixin):
     __tablename__ = "teams"
+    __table_args__ = (
+        Index(
+            "ix_teams_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(

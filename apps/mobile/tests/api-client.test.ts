@@ -513,7 +513,7 @@ describe("apiRequest", () => {
       expect.arrayContaining(["id", "name", "email", "avatar_url"])
     );
     expect(schemaProperties("EventRead")).toEqual(
-      expect.arrayContaining(["match_details", "signup_deadline", "status", "type"])
+      expect.arrayContaining(["match_details", "end_time", "status", "type"])
     );
     expect(schemaProperties("EventSignupRead")).toEqual(
       expect.arrayContaining(["user", "status", "note", "created_at", "updated_at"])
@@ -534,14 +534,14 @@ describe("apiRequest", () => {
       expect.arrayContaining([
         "team",
         "current_membership",
-        "captains",
+        "admins",
         "upcoming_events",
         "signup_summary",
         "coin_summary"
       ])
     );
     expect(schemaProperties("MembershipRead")).toEqual(
-      expect.arrayContaining(["user", "role", "status", "jersey_number", "position", "left_at"])
+      expect.arrayContaining(["user", "role", "status", "jersey_number", "player_name", "left_at"])
     );
   });
 });

@@ -5,8 +5,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.common.enums import EventStatus, MembershipRole, MembershipStatus, SignupStatus
-from app.models import CoinTransaction, Event, EventSignup, TeamMembership, User
+from app.common.enums import EventStatus, MembershipRole, MembershipStatus, SignupStatus, TeamStatus
+from app.models import CoinTransaction, Event, EventSignup, Organization, Team, TeamMembership, User
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,45 @@ class TeamHomeData:
     signup_counts: list[tuple[SignupStatus, int]]
     user_balance: int
     team_ledger_total: int
+
+
+@dataclass(frozen=True)
+class TeamSearchResultData:
+    team: Team
+    organization_name: str
+    membership_status: MembershipStatus | None
+
+
+def search_active_teams(
+    session: Session,
+    *,
+    user_id: UUID,
+    query: str,
+    limit: int,
+) -> list[TeamSearchResultData]:
+    escaped_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = session.execute(
+        select(Team, Organization.name, TeamMembership.status)
+        .join(Organization, Organization.id == Team.organization_id)
+        .outerjoin(
+            TeamMembership,
+            (TeamMembership.team_id == Team.id) & (TeamMembership.user_id == user_id),
+        )
+        .where(
+            Team.status == TeamStatus.active,
+            Team.name.ilike(f"%{escaped_query}%", escape="\\"),
+        )
+        .order_by(func.lower(Team.name), Team.id)
+        .limit(limit)
+    ).all()
+    return [
+        TeamSearchResultData(
+            team=team,
+            organization_name=organization_name,
+            membership_status=membership_status,
+        )
+        for team, organization_name, membership_status in rows
+    ]
 
 
 def load_signup_board_data(

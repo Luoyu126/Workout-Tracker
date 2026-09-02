@@ -4,7 +4,9 @@ import type { TranslationKey } from "@/lib/i18n/translations";
 type Translate = (key: TranslationKey) => string;
 
 const errorCodeTranslations: Partial<Record<string, TranslationKey>> = {
+  ALREADY_TEAM_MEMBER: "common.alreadyTeamMember",
   DUPLICATE_MEMBERSHIP: "common.duplicateMembership",
+  JOIN_REQUEST_PENDING: "common.joinRequestPending",
   LAST_ADMIN_REQUIRED: "common.lastAdminRequired",
   MEMBER_NOT_ELIGIBLE: "common.memberNotEligible"
 };

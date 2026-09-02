@@ -8,7 +8,6 @@ import {
   deleteEvent,
   getEvent,
   getMySignup,
-  publishEvent,
   updateEvent,
   updateMySignup,
   type EventSignup,
@@ -21,7 +20,6 @@ import {
   isValidMatchScoreResult,
   isValidEventSchedule,
   parseIsoDateTime,
-  parseOptionalIsoDateTime,
   parseOptionalNonNegativeInteger
 } from "@/features/events/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
@@ -51,7 +49,6 @@ export default function EventDetailScreen() {
   const [editLocation, setEditLocation] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
-  const [editSignupDeadline, setEditSignupDeadline] = useState("");
   const [editOpponent, setEditOpponent] = useState("");
   const [editTeamScore, setEditTeamScore] = useState("");
   const [editOpponentScore, setEditOpponentScore] = useState("");
@@ -86,8 +83,7 @@ export default function EventDetailScreen() {
     setEditDescription(loadedEvent.description ?? "");
     setEditLocation(loadedEvent.location ?? "");
     setEditStartTime(loadedEvent.start_time);
-    setEditEndTime(loadedEvent.end_time ?? "");
-    setEditSignupDeadline(loadedEvent.signup_deadline ?? "");
+    setEditEndTime(loadedEvent.end_time);
     setEditOpponent(loadedEvent.match_details?.opponent ?? "");
     setEditTeamScore(loadedEvent.match_details?.team_score?.toString() ?? "");
     setEditOpponentScore(loadedEvent.match_details?.opponent_score?.toString() ?? "");
@@ -140,8 +136,8 @@ export default function EventDetailScreen() {
     }
   }, [eventId]);
 
-  const canUpdateSignup = event?.status === "published" && isSignupOpen(event.signup_deadline, event.start_time);
-  const canManageEventStatus = event?.status === "draft" || event?.status === "published";
+  const canUpdateSignup = event?.status === "published" && isSignupOpen(event.start_time);
+  const canManageEventStatus = event?.status === "published";
   const canManageEventRole = currentRole === "captain" || currentRole === "admin";
   const canManageEvent = canManageEventStatus && canManageEventRole;
   const canCompleteEvent = canManageEventRole && event?.status === "published";
@@ -183,31 +179,6 @@ export default function EventDetailScreen() {
     }
   }
 
-  async function handlePublishEvent() {
-    if (!eventId) {
-      return;
-    }
-    if (!canManageEventRole) {
-      showError(t("events.captainOnlyHint"));
-      return;
-    }
-    if (event?.status !== "draft") {
-      showError(t("events.manageReadonly"));
-      return;
-    }
-    setIsLoading(true);
-    clearMessage();
-    try {
-      await publishEvent(eventId);
-      await refreshEventSilently();
-      showSuccess(t("events.published"));
-    } catch (error) {
-      showError(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function handleUpdateEvent() {
     if (!eventId) {
       return;
@@ -221,20 +192,18 @@ export default function EventDetailScreen() {
       return;
     }
     const parsedStartTime = parseIsoDateTime(editStartTime);
-    const parsedEndTime = parseOptionalIsoDateTime(editEndTime);
-    const parsedSignupDeadline = parseOptionalIsoDateTime(editSignupDeadline);
+    const parsedEndTime = parseIsoDateTime(editEndTime);
     const teamScore = parseOptionalNonNegativeInteger(editTeamScore);
     const opponentScore = parseOptionalNonNegativeInteger(editOpponentScore);
     if (
       editTitle.trim().length === 0 ||
       parsedStartTime === null ||
-      (editEndTime.trim().length > 0 && parsedEndTime === null) ||
-      (editSignupDeadline.trim().length > 0 && parsedSignupDeadline === null)
+      parsedEndTime === null
     ) {
       showError(t("events.invalidEventInput"));
       return;
     }
-    if (!isValidEventSchedule(parsedStartTime, parsedEndTime, parsedSignupDeadline)) {
+    if (!isValidEventSchedule(parsedStartTime, parsedEndTime)) {
       showError(t("events.invalidSchedule"));
       return;
     }
@@ -260,7 +229,6 @@ export default function EventDetailScreen() {
         location: editLocation.trim().length > 0 ? editLocation.trim() : null,
         start_time: parsedStartTime,
         end_time: parsedEndTime,
-        signup_deadline: parsedSignupDeadline,
         ...(event?.type === "match"
           ? {
               match_details: {
@@ -480,15 +448,6 @@ export default function EventDetailScreen() {
               style={styles.input}
               value={editEndTime}
             />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setEditSignupDeadline}
-              placeholder={t("events.signupDeadline")}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={editSignupDeadline}
-            />
             {event.type === "match" ? (
               <View style={styles.matchDetailsForm}>
                 <Text style={styles.cardTitle}>{t("events.matchDetails")}</Text>
@@ -544,16 +503,6 @@ export default function EventDetailScreen() {
                   value={editMatchNotes}
                 />
               </View>
-            ) : null}
-            {event.status === "draft" ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={isLoading}
-                onPress={handlePublishEvent}
-                style={[styles.secondaryButton, isLoading && styles.disabled]}
-              >
-                <Text style={styles.secondaryText}>{t("events.publish")}</Text>
-              </Pressable>
             ) : null}
             <Pressable
               accessibilityRole="button"

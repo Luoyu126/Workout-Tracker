@@ -11,6 +11,10 @@ def get_team(session: Session, team_id: UUID) -> Team | None:
     return session.get(Team, team_id)
 
 
+def get_team_for_update(session: Session, team_id: UUID) -> Team | None:
+    return session.scalar(select(Team).where(Team.id == team_id).with_for_update())
+
+
 def get_user(session: Session, user_id: UUID) -> User | None:
     return session.get(User, user_id)
 
@@ -21,6 +25,21 @@ def find_membership(session: Session, team_id: UUID, user_id: UUID) -> TeamMembe
             TeamMembership.team_id == team_id,
             TeamMembership.user_id == user_id,
         )
+    )
+
+
+def find_membership_for_update(
+    session: Session,
+    team_id: UUID,
+    user_id: UUID,
+) -> TeamMembership | None:
+    return session.scalar(
+        select(TeamMembership)
+        .where(
+            TeamMembership.team_id == team_id,
+            TeamMembership.user_id == user_id,
+        )
+        .with_for_update()
     )
 
 
@@ -157,6 +176,10 @@ def lock_active_admin_memberships(session: Session, team_id: UUID) -> None:
 
 def add_membership(session: Session, membership: TeamMembership) -> None:
     session.add(membership)
+
+
+def flush(session: Session) -> None:
+    session.flush()
 
 
 def refresh(session: Session, value: object) -> None:

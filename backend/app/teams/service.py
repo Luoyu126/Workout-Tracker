@@ -18,13 +18,20 @@ from app.models import Team, TeamMembership, User
 from app.teams import queries, repository
 from app.teams.eligibility import is_membership_eligible_for_event
 from app.teams.errors import (
+    AlreadyTeamMemberError,
     DuplicateMembershipError,
+    JoinRequestPendingError,
     LastAdminError,
     MemberNotEligibleError,
     MembershipNotFoundError,
     TeamNotFoundError,
 )
-from app.teams.schemas import MembershipCreateRequest, MembershipUpdateRequest, TeamUpdateRequest
+from app.teams.schemas import (
+    MembershipCreateRequest,
+    MembershipUpdateRequest,
+    TeamSearchResultRead,
+    TeamUpdateRequest,
+)
 
 
 def _membership_matches_create_request(membership: TeamMembership, payload: MembershipCreateRequest) -> bool:
@@ -97,6 +104,70 @@ def require_team_role(
 
 def list_my_teams(session: Session, user: User, status: TeamStatus | None = TeamStatus.active) -> list[Team]:
     return repository.list_teams_for_user(session, user.id, status)
+
+
+def search_teams(
+    session: Session,
+    user: User,
+    query: str,
+    limit: int,
+) -> list[TeamSearchResultRead]:
+    normalized_query = query.strip()
+    if len(normalized_query) < 2:
+        return []
+    results = queries.search_active_teams(
+        session,
+        user_id=user.id,
+        query=normalized_query,
+        limit=limit,
+    )
+    return [
+        TeamSearchResultRead(
+            id=result.team.id,
+            name=result.team.name,
+            description=result.team.description,
+            logo_url=result.team.logo_url,
+            organization_name=result.organization_name,
+            membership_status=result.membership_status,
+        )
+        for result in results
+    ]
+
+
+def request_to_join_team(
+    session: Session,
+    team_id: UUID,
+    user: User,
+) -> TeamMembership:
+    with transaction_boundary(session):
+        team = repository.get_team_for_update(session, team_id)
+        if team is None or team.status != TeamStatus.active:
+            raise TeamNotFoundError()
+
+        membership = repository.find_membership_for_update(session, team_id, user.id)
+        if membership is None:
+            membership = TeamMembership(
+                team_id=team_id,
+                user_id=user.id,
+                role=MembershipRole.member,
+                status=MembershipStatus.pending,
+            )
+            repository.add_membership(session, membership)
+        elif membership.status == MembershipStatus.pending:
+            raise JoinRequestPendingError()
+        elif membership.status == MembershipStatus.active:
+            raise AlreadyTeamMemberError()
+        else:
+            membership.role = MembershipRole.member
+            membership.status = MembershipStatus.pending
+            membership.joined_at = None
+            membership.left_at = None
+        repository.flush(session)
+
+    loaded_membership = repository.get_membership_with_user(session, team_id, user.id)
+    if loaded_membership is None:
+        raise MembershipNotFoundError()
+    return loaded_membership
 
 
 def get_team_for_member(session: Session, team_id: UUID, user: User) -> Team:

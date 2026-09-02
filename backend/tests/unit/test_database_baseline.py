@@ -19,6 +19,9 @@ SIGNUP_REWARD_MIGRATION = (
 ALIGNMENT_MIGRATION = (
     ROOT_DIR / "backend/migrations/versions/20260830_0003_align_local_database.py"
 )
+TEAM_SEARCH_MIGRATION = (
+    ROOT_DIR / "backend/migrations/versions/20260902_0005_add_team_name_search_index.py"
+)
 
 EXPECTED_TABLE_COLUMNS = {
     "users": {
@@ -220,6 +223,7 @@ def test_database_baseline_keeps_required_uniqueness_guards() -> None:
         index.name: index for index in Base.metadata.tables["notifications"].indexes
     }
     coin_rule_indexes = {index.name: index for index in Base.metadata.tables["coin_rules"].indexes}
+    team_indexes = {index.name: index for index in Base.metadata.tables["teams"].indexes}
 
     assert users.columns["auth_id"].unique is True
     assert users.columns["email"].unique is True
@@ -236,6 +240,12 @@ def test_database_baseline_keeps_required_uniqueness_guards() -> None:
     assert "uq_notifications_user_type_reference" in notification_indexes
     assert "uq_coin_rules_active_training_signup_team" in coin_rule_indexes
     assert "uq_coin_rules_active_match_signup_team" in coin_rule_indexes
+    assert "ix_teams_name_trgm" in team_indexes
+    assert [column.name for column in team_indexes["ix_teams_name_trgm"].columns] == ["name"]
+    assert team_indexes["ix_teams_name_trgm"].dialect_options["postgresql"]["using"] == "gin"
+    assert team_indexes["ix_teams_name_trgm"].dialect_options["postgresql"]["ops"] == {
+        "name": "gin_trgm_ops"
+    }
     assert device_tokens.columns["token"].unique is True
 
 
@@ -680,5 +690,17 @@ def test_alignment_migration_contains_all_six_database_areas() -> None:
         '"uq_coin_redemption_team_user_reference"',
         'sa.Column("cancelled_by", postgresql.UUID(as_uuid=True), nullable=True)',
         'sa.Column("refunded_by", postgresql.UUID(as_uuid=True), nullable=True)',
+    ):
+        assert phrase in migration_source
+
+
+def test_team_search_migration_adds_postgresql_trigram_index() -> None:
+    migration_source = TEAM_SEARCH_MIGRATION.read_text(encoding="utf-8")
+
+    for phrase in (
+        "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+        '"ix_teams_name_trgm"',
+        'postgresql_using="gin"',
+        'postgresql_ops={"name": "gin_trgm_ops"}',
     ):
         assert phrase in migration_source

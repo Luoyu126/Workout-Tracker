@@ -14,6 +14,15 @@ export type Team = {
 
 export type TeamStatus = Team["status"];
 
+export type TeamSearchResult = {
+  id: string;
+  name: string;
+  description: string | null;
+  logo_url: string | null;
+  organization_name: string;
+  membership_status: MembershipStatus | null;
+};
+
 export type Organization = {
   id: string;
   name: string;
@@ -29,7 +38,7 @@ export type Membership = {
   user_id: string;
   role: "member" | "captain" | "admin";
   jersey_number: string | null;
-  position: string | null;
+  player_name: string | null;
   status: "active" | "inactive" | "pending";
   joined_at: string;
   left_at: string | null;
@@ -58,14 +67,14 @@ export type MembershipInput = {
   user_id: string;
   role?: MembershipRole;
   jersey_number?: string | null;
-  position?: string | null;
+  player_name?: string | null;
   status?: MembershipStatus;
 };
 
 export type MembershipUpdateInput = {
   role?: MembershipRole | null;
   jersey_number?: string | null;
-  position?: string | null;
+  player_name?: string | null;
   status?: MembershipStatus | null;
   left_at?: string | null;
 };
@@ -78,7 +87,7 @@ export type TeamMembersQuery = {
 export type TeamHome = {
   team: Team;
   current_membership: Membership;
-  captains: Membership[];
+  admins: Membership[];
   member_count: number;
   upcoming_events: Array<{
     id: string;
@@ -129,6 +138,19 @@ export function getMyTeams(options: { status?: TeamStatus | null } = {}) {
   }
   const queryString = params.toString();
   return apiRequest<Team[]>(`/api/v1/teams${queryString ? `?${queryString}` : ""}`);
+}
+
+export function searchTeams(query: string, limit = 20) {
+  const params = new URLSearchParams();
+  params.set("query", query.trim());
+  params.set("limit", String(limit));
+  return apiRequest<TeamSearchResult[]>(`/api/v1/teams/search?${params.toString()}`);
+}
+
+export function requestToJoinTeam(teamId: string) {
+  return apiRequest<Membership>(`/api/v1/teams/${teamId}/join-requests`, {
+    method: "POST"
+  });
 }
 
 export function getMyOrganizations() {
@@ -196,7 +218,7 @@ export function addTeamMember(teamId: string, input: MembershipInput) {
       user_id: input.user_id.trim(),
       role: input.role,
       jersey_number: normalizeOptionalText(input.jersey_number),
-      position: normalizeOptionalText(input.position),
+      player_name: normalizeOptionalText(input.player_name),
       status: input.status
     })
   });
@@ -208,7 +230,7 @@ export function updateTeamMember(teamId: string, userId: string, input: Membersh
     body: omitUndefined({
       role: input.role,
       jersey_number: normalizeOptionalText(input.jersey_number),
-      position: normalizeOptionalText(input.position),
+      player_name: normalizeOptionalText(input.player_name),
       status: input.status,
       left_at: input.left_at
     })

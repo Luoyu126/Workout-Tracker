@@ -58,6 +58,7 @@ export const apiSchemaNames = [
   "TeamAnnouncementRequest",
   "TeamHomeRead",
   "TeamRead",
+  "TeamSearchResultRead",
   "TeamStatus",
   "TeamUpdateRequest",
   "UnreadCountRead",
@@ -356,6 +357,17 @@ export const apiEndpoints = [
     ]
   },
   {
+    "operationId": "read_team_search_api_v1_teams_search_get",
+    "method": "GET",
+    "path": "/api/v1/teams/search",
+    "requestBody": null,
+    "response": "TeamSearchResultRead[]",
+    "statusCodes": [
+      200,
+      422
+    ]
+  },
+  {
     "operationId": "read_team_api_v1_teams__team_id__get",
     "method": "GET",
     "path": "/api/v1/teams/{team_id}",
@@ -471,6 +483,17 @@ export const apiEndpoints = [
     "path": "/api/v1/teams/{team_id}/home",
     "requestBody": null,
     "response": "TeamHomeRead",
+    "statusCodes": [
+      200,
+      422
+    ]
+  },
+  {
+    "operationId": "post_join_request_api_v1_teams__team_id__join_requests_post",
+    "method": "POST",
+    "path": "/api/v1/teams/{team_id}/join-requests",
+    "requestBody": null,
+    "response": "MembershipRead",
     "statusCodes": [
       200,
       422
