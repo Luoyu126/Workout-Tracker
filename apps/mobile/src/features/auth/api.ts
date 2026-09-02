@@ -40,10 +40,11 @@ export async function signUp(input: SignUpInput) {
   if (normalizedInput === null) {
     throw new AuthValidationError("Email and password are required");
   }
-  const { error } = await supabase.auth.signUp(normalizedInput);
+  const { data, error } = await supabase.auth.signUp(normalizedInput);
   if (error) {
     throw error;
   }
+  return data.session;
 }
 
 export async function signIn(input: SignInInput) {
@@ -51,10 +52,11 @@ export async function signIn(input: SignInInput) {
   if (normalizedInput === null) {
     throw new AuthValidationError("Email and password are required");
   }
-  const { error } = await supabase.auth.signInWithPassword(normalizedInput);
+  const { data, error } = await supabase.auth.signInWithPassword(normalizedInput);
   if (error) {
     throw error;
   }
+  return data.session;
 }
 
 export async function signOut() {

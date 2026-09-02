@@ -1,35 +1,43 @@
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CompactLanguageToggle } from "@/components/LanguageToggle";
 import { Button, Screen, TextField } from "@/components/ui";
-import { getMyProfile, signIn, signUp, syncProfile, type SyncProfileInput } from "@/features/auth/api";
+import type { SyncProfileInput } from "@/features/auth/api";
 import { normalizeAuthCredentials, normalizeProfileInput } from "@/features/auth/validation";
-import { ApiError, apiConfig } from "@/lib/api/client";
+import { apiConfig } from "@/lib/api/client";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { supabaseConfig } from "@/lib/supabase/config";
+import { useAuth } from "@/providers/AuthProvider";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
 export default function LoginScreen() {
   const { t } = useI18n();
-  const router = useRouter();
+  const {
+    status,
+    error: authError,
+    signInAndPrepare,
+    signUpAndPrepare,
+    completeProfile,
+    retrySessionCheck,
+    signOut
+  } = useAuth();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [studentId, setStudentId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [didAuthenticate, setDidAuthenticate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const hasApiConfigProblem = !apiConfig.isConfigured || apiConfig.isMalformed;
+  const isCompletingProfile = status === "needsProfile";
+  const hasSessionError = status === "error";
 
   function buildProfileInput(): SyncProfileInput | null {
     const profileInput = normalizeProfileInput(name, studentId);
     if (profileInput === null) {
-      setDidAuthenticate(false);
       setMessage(t("auth.nameRequired"));
     }
     return profileInput;
@@ -37,42 +45,20 @@ export default function LoginScreen() {
 
   async function handleSignIn() {
     if (!supabaseConfig.isConfigured) {
-      setDidAuthenticate(false);
       setMessage(t("auth.supabaseConfigMissing"));
       return;
     }
     const credentials = normalizeAuthCredentials(email, password);
     if (credentials === null) {
-      setDidAuthenticate(false);
       setMessage(t("auth.credentialsRequired"));
       return;
     }
     setIsSubmitting(true);
-    setDidAuthenticate(false);
     setMessage(null);
     try {
-      await signIn(credentials);
-      try {
-        await getMyProfile();
-        setDidAuthenticate(true);
-        setMessage(t("auth.signInSuccess"));
-        router.replace("/");
-      } catch (error) {
-        if (error instanceof ApiError && error.code === "USER_NOT_SYNCED") {
-          const profileInput = normalizeProfileInput(name, studentId);
-          if (profileInput === null) {
-            setDidAuthenticate(true);
-            setMode("signUp");
-            setMessage(t("auth.signInNeedsProfile"));
-            return;
-          }
-          await syncProfile(profileInput);
-          setDidAuthenticate(true);
-          setMessage(t("auth.signInSyncedProfile"));
-          router.replace("/");
-          return;
-        }
-        throw error;
+      const result = await signInAndPrepare(credentials);
+      if (result === "needsProfile") {
+        setMessage(t("auth.signInNeedsProfile"));
       }
     } catch (error) {
       setMessage(formatApiError(error, t));
@@ -83,13 +69,11 @@ export default function LoginScreen() {
 
   async function handleSignUp() {
     if (!supabaseConfig.isConfigured) {
-      setDidAuthenticate(false);
       setMessage(t("auth.supabaseConfigMissing"));
       return;
     }
     const credentials = normalizeAuthCredentials(email, password);
     if (credentials === null) {
-      setDidAuthenticate(false);
       setMessage(t("auth.credentialsRequired"));
       return;
     }
@@ -98,18 +82,52 @@ export default function LoginScreen() {
       return;
     }
     setIsSubmitting(true);
-    setDidAuthenticate(false);
     setMessage(null);
     try {
-      await signUp(credentials);
-      try {
-        await syncProfile(profileInput);
-        setDidAuthenticate(true);
-        setMessage(t("auth.signUpSuccess"));
-        router.replace("/");
-      } catch {
+      const result = await signUpAndPrepare(credentials, profileInput);
+      if (result === "verificationRequired") {
         setMessage(t("auth.signUpNeedsSignIn"));
       }
+    } catch (error) {
+      setMessage(formatApiError(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleCompleteProfile() {
+    const profileInput = buildProfileInput();
+    if (profileInput === null) {
+      return;
+    }
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await completeProfile(profileInput);
+    } catch (error) {
+      setMessage(formatApiError(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRetrySession() {
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await retrySessionCheck();
+    } catch (error) {
+      setMessage(formatApiError(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await signOut();
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -125,16 +143,26 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.title}>{mode === "signIn" ? t("auth.welcomeBack") : t("auth.createAccount")}</Text>
+        <Text style={styles.title}>
+          {isCompletingProfile
+            ? t("auth.syncProfile")
+            : mode === "signIn"
+              ? t("auth.welcomeBack")
+              : t("auth.createAccount")}
+        </Text>
         <Text style={styles.subtitle}>
-          {mode === "signIn" ? t("auth.signInHint") : t("auth.signUpHint")}
+          {isCompletingProfile
+            ? t("auth.signInNeedsProfile")
+            : mode === "signIn"
+              ? t("auth.signInHint")
+              : t("auth.signUpHint")}
         </Text>
       </View>
 
       {!supabaseConfig.isConfigured ? <Text style={styles.message}>{t("auth.supabaseConfigMissing")}</Text> : null}
       {hasApiConfigProblem ? <Text style={styles.message}>{t("auth.apiConfigMissing")}</Text> : null}
 
-      {mode === "signUp" || didAuthenticate ? (
+      {mode === "signUp" || isCompletingProfile ? (
         <>
           <TextField
             autoComplete="name"
@@ -152,51 +180,82 @@ export default function LoginScreen() {
         </>
       ) : null}
 
-      <TextField
-        autoCapitalize="none"
-        autoComplete="email"
-        autoCorrect={false}
-        keyboardType="email-address"
-        label={t("auth.emailOrStudentId")}
-        onChangeText={setEmail}
-        placeholder={t("auth.email")}
-        textContentType="emailAddress"
-        value={email}
-      />
-      <TextField
-        autoCapitalize="none"
-        autoComplete="password"
-        autoCorrect={false}
-        label={t("auth.password")}
-        onChangeText={setPassword}
-        secureTextEntry
-        textContentType="password"
-        value={password}
-      />
-
-      <Button
-        disabled={isSubmitting || !supabaseConfig.isConfigured}
-        label={mode === "signIn" ? t("auth.signIn") : t("auth.signUp")}
-        onPress={() => void (mode === "signIn" ? handleSignIn() : handleSignUp())}
-      />
-
-      <Button
-        disabled={isSubmitting || !supabaseConfig.isConfigured}
-        label={mode === "signIn" ? t("auth.signUp") : t("auth.signIn")}
-        variant="secondary"
-        onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
-      />
-
-      {didAuthenticate ? (
-        <Button label={t("home.openTeams")} variant="ghost" onPress={() => router.replace("/teams")} />
+      {!isCompletingProfile && !hasSessionError ? (
+        <>
+          <TextField
+            autoCapitalize="none"
+            autoComplete="email"
+            autoCorrect={false}
+            keyboardType="email-address"
+            label={t("auth.emailOrStudentId")}
+            onChangeText={setEmail}
+            placeholder={t("auth.email")}
+            textContentType="emailAddress"
+            value={email}
+          />
+          <TextField
+            autoCapitalize="none"
+            autoComplete="password"
+            autoCorrect={false}
+            label={t("auth.password")}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType="password"
+            value={password}
+          />
+        </>
       ) : null}
 
-      <Text style={styles.switchText}>
-        {mode === "signIn" ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
-        <Text style={styles.switchLink} onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>
-          {mode === "signIn" ? t("auth.registerNow") : t("auth.signIn")}
+      {hasSessionError ? (
+        <>
+          <Text style={styles.message}>{formatApiError(authError, t)}</Text>
+          <Button disabled={isSubmitting} label={t("common.retry")} onPress={() => void handleRetrySession()} />
+          <Button
+            disabled={isSubmitting}
+            label={t("auth.signOut")}
+            variant="secondary"
+            onPress={() => void handleSignOut()}
+          />
+        </>
+      ) : isCompletingProfile ? (
+        <>
+          <Button
+            disabled={isSubmitting}
+            label={t("auth.syncProfile")}
+            onPress={() => void handleCompleteProfile()}
+          />
+          <Button
+            disabled={isSubmitting}
+            label={t("auth.signOut")}
+            variant="secondary"
+            onPress={() => void handleSignOut()}
+          />
+        </>
+      ) : (
+        <>
+          <Button
+            disabled={isSubmitting || !supabaseConfig.isConfigured}
+            label={mode === "signIn" ? t("auth.signIn") : t("auth.signUp")}
+            onPress={() => void (mode === "signIn" ? handleSignIn() : handleSignUp())}
+          />
+
+          <Button
+            disabled={isSubmitting || !supabaseConfig.isConfigured}
+            label={mode === "signIn" ? t("auth.signUp") : t("auth.signIn")}
+            variant="secondary"
+            onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
+          />
+        </>
+      )}
+
+      {!isCompletingProfile && !hasSessionError ? (
+        <Text style={styles.switchText}>
+          {mode === "signIn" ? t("auth.noAccount") : t("auth.hasAccount")}{" "}
+          <Text style={styles.switchLink} onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>
+            {mode === "signIn" ? t("auth.registerNow") : t("auth.signIn")}
+          </Text>
         </Text>
-      </Text>
+      ) : null}
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </Screen>
