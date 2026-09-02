@@ -1,37 +1,54 @@
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
-import { useEffect } from "react";
-import { AppState, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { useEffect, useRef } from "react";
+import { ActivityIndicator, AppState, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { registerDeviceToken } from "@/features/notifications/api";
 import { refreshExpoPushTokenIfGrantedAsync } from "@/features/notifications/deviceToken";
 import { getNotificationRoute } from "@/features/notifications/navigation";
-import { AppProviders } from "@/providers/AppProviders";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import { installWebAlert } from "@/lib/webAlert";
+import { AppProviders } from "@/providers/AppProviders";
+import { useAuth, type AuthStatus } from "@/providers/AuthProvider";
 import { colors } from "@/theme/colors";
+import { spacing, typography } from "@/theme/tokens";
 
 installWebAlert();
 
-export default function RootLayout() {
+function AppNavigator() {
   const router = useRouter();
+  const { t } = useI18n();
+  const { status } = useAuth();
+  const statusRef = useRef<AuthStatus>(status);
+  const pendingNotificationRef = useRef<Notifications.NotificationResponse | null>(null);
 
   useEffect(() => {
-    function openNotificationRoute(response: Notifications.NotificationResponse) {
-      const route = getNotificationRoute(response.notification.request.content.data);
-      if (route) {
-        router.push(route);
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    function handleNotificationResponse(response: Notifications.NotificationResponse) {
+      if (statusRef.current === "ready") {
+        const route = getNotificationRoute(response.notification.request.content.data);
+        if (route) {
+          router.push(route);
+        }
+      } else if (statusRef.current === "checking") {
+        pendingNotificationRef.current = response;
+      } else {
+        pendingNotificationRef.current = null;
       }
+      void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
     }
 
     let subscription: Notifications.EventSubscription | undefined;
     try {
-      subscription = Notifications.addNotificationResponseReceivedListener(openNotificationRoute);
+      subscription = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
       void Notifications.getLastNotificationResponseAsync()
         .then((response) => {
           if (response) {
-            openNotificationRoute(response);
-            void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
+            handleNotificationResponse(response);
           }
         })
         .catch(() => undefined);
@@ -45,6 +62,23 @@ export default function RootLayout() {
   }, [router]);
 
   useEffect(() => {
+    const pendingResponse = pendingNotificationRef.current;
+    if (status === "ready" && pendingResponse) {
+      pendingNotificationRef.current = null;
+      const route = getNotificationRoute(pendingResponse.notification.request.content.data);
+      if (route) {
+        router.push(route);
+      }
+    } else if (status !== "checking") {
+      pendingNotificationRef.current = null;
+    }
+  }, [router, status]);
+
+  useEffect(() => {
+    if (status !== "ready") {
+      return;
+    }
+
     async function refreshRegisteredExpoPushToken() {
       try {
         const registration = await refreshExpoPushTokenIfGrantedAsync();
@@ -66,28 +100,39 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [status]);
 
+  if (status === "checking") {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={colors.accent} size="large" />
+        <Text style={styles.loadingText}>{t("common.loading")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.keyboardAvoidingContainer}
+    >
+      <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
+        <Stack.Protected guard={status !== "ready"}>
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={status === "ready"}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        </Stack.Protected>
+      </Stack>
+    </KeyboardAvoidingView>
+  );
+}
+
+export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AppProviders>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.keyboardAvoidingContainer}
-        >
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: colors.surface },
-              headerTintColor: colors.text,
-              headerTitleStyle: { fontWeight: "700" },
-              contentStyle: { backgroundColor: colors.background },
-              headerShadowVisible: false
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-          </Stack>
-        </KeyboardAvoidingView>
+        <AppNavigator />
       </AppProviders>
     </SafeAreaProvider>
   );
@@ -96,5 +141,16 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   keyboardAvoidingContainer: {
     flex: 1
+  },
+  loadingContainer: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    flex: 1,
+    gap: spacing.md,
+    justifyContent: "center"
+  },
+  loadingText: {
+    color: colors.muted,
+    ...typography.body
   }
 });

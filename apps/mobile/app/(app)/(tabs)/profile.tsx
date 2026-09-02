@@ -7,7 +7,6 @@ import { ScreenState } from "@/components/ScreenState";
 import { Avatar, Badge, Button, Card, ListRow, Screen, TextField } from "@/components/ui";
 import {
   getMyProfile,
-  signOut,
   syncProfile,
   updateProfile,
   type UserProfile
@@ -15,6 +14,7 @@ import {
 import { normalizeProfileInput } from "@/features/auth/validation";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useAuth } from "@/providers/AuthProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
@@ -22,6 +22,7 @@ import { spacing, typography } from "@/theme/tokens";
 export default function ProfileTabScreen() {
   const { t } = useI18n();
   const router = useRouter();
+  const { signOut } = useAuth();
   const { home, role } = useTeamContext();
   const [name, setName] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -114,8 +115,6 @@ export default function ProfileTabScreen() {
     try {
       await signOut();
       setProfile(null);
-      setMessage(t("auth.signOutSuccess"));
-      router.replace("/login");
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
