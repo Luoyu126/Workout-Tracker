@@ -77,11 +77,11 @@ export default function EventDetailScreen() {
     setMessage(null);
   }
 
-  function applyLoadedEvent(loadedEvent: TeamEvent, loadedSignup: EventSignup) {
+  function applyLoadedEvent(loadedEvent: TeamEvent, loadedSignup: EventSignup | null) {
     setEvent(loadedEvent);
     setSignup(loadedSignup);
-    setSelectedSignupStatus(selectableStatusFromSignup(loadedSignup));
-    setLeaveReason(loadedSignup.note ?? "");
+    setSelectedSignupStatus(loadedSignup ? selectableStatusFromSignup(loadedSignup) : null);
+    setLeaveReason(loadedSignup?.note ?? "");
     setEditTitle(loadedEvent.title);
     setEditDescription(loadedEvent.description ?? "");
     setEditLocation(loadedEvent.location ?? "");
@@ -98,8 +98,9 @@ export default function EventDetailScreen() {
     if (!eventId) {
       return null;
     }
-    const [loadedEvent, loadedSignup] = await Promise.all([getEvent(eventId), getMySignup(eventId)]);
+    const loadedEvent = await getEvent(eventId);
     const teamHome = await getTeamHome(loadedEvent.team_id);
+    const loadedSignup = teamHome.current_membership.role === "member" ? await getMySignup(eventId) : null;
     return { loadedEvent, loadedSignup, currentRole: teamHome.current_membership.role };
   }
 
@@ -141,9 +142,9 @@ export default function EventDetailScreen() {
     }
   }, [eventId]);
 
-  const canUpdateSignup = event?.status === "published" && isSignupOpen(event.start_time);
+  const canUpdateSignup = currentRole === "member" && event?.status === "published" && isSignupOpen(event.start_time);
   const canManageEventStatus = event?.status === "published";
-  const canManageEventRole = currentRole === "captain" || currentRole === "admin";
+  const canManageEventRole = currentRole === "admin";
   const canManageEvent = canManageEventStatus && canManageEventRole;
   const canCompleteEvent = canManageEventRole && event?.status === "published";
 
@@ -523,7 +524,7 @@ export default function EventDetailScreen() {
           </View>
         ) : null}
 
-        {event && !canManageEventRole ? (
+        {event && currentRole === "member" ? (
           <View style={styles.actions}>
             {signup ? (
               <View style={styles.card}>

@@ -514,7 +514,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("canManageEvent");
     expect(source).toContain("canManageEventStatus");
     expect(source).toContain("canManageEventRole");
-    expect(source).toContain('currentRole === "captain" || currentRole === "admin"');
+    expect(source).toContain('const canManageEventRole = currentRole === "admin"');
     expect(source).toContain('event?.status === "published"');
     expect(source).toContain("events.manageReadonly");
     expect(source).toContain("events.captainOnlyHint");
