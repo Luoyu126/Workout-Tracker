@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { ScreenState } from "@/components/ScreenState";
 import { getStoreItem, redeemStoreItem, type StoreItem } from "@/features/store/api";
 import { parseRedemptionQuantity } from "@/features/store/validation";
+import { getTeamHome } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -27,6 +28,7 @@ export default function StoreItemDetailScreen() {
   const { storeItemId, teamId } = useLocalSearchParams<{ storeItemId: string; teamId?: string }>();
   const { t } = useI18n();
   const [item, setItem] = useState<StoreItem | null>(null);
+  const [canRedeem, setCanRedeem] = useState(false);
   const [quantity, setQuantity] = useState("1");
   const [pendingRedemption, setPendingRedemption] = useState<PendingRedemptionRequest | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,8 +41,12 @@ export default function StoreItemDetailScreen() {
     setIsLoading(true);
     setMessage(null);
     setLoadState({ status: "loading" });
+    setCanRedeem(false);
     try {
-      setItem(await getStoreItem(storeItemId));
+      const nextItem = await getStoreItem(storeItemId);
+      const teamHome = await getTeamHome(nextItem.team_id);
+      setItem(nextItem);
+      setCanRedeem(teamHome.current_membership.role === "member");
       setLoadState({ status: "success" });
     } catch (error) {
       setLoadState({ status: "error", error });
@@ -56,7 +62,7 @@ export default function StoreItemDetailScreen() {
   }, [storeItemId]);
 
   async function handleRedeem() {
-    if (!item) {
+    if (!item || !canRedeem) {
       return;
     }
     if (!canRedeemItem(item)) {
@@ -131,7 +137,7 @@ export default function StoreItemDetailScreen() {
             {t("store.stock")}: {item.stock ?? "∞"}
           </Text>
           <Text style={styles.muted}>{item.is_active ? t("store.active") : t("store.inactive")}</Text>
-          {canRedeemItem(item) ? (
+          {canRedeem && (canRedeemItem(item) ? (
             <>
               <TextInput
                 autoCorrect={false}
@@ -153,7 +159,7 @@ export default function StoreItemDetailScreen() {
             </>
           ) : (
             <Text style={styles.muted}>{t("store.unavailable")}</Text>
-          )}
+          ))}
           {scopedTeamId ? (
             <View style={styles.grid}>
               <Link href={{ pathname: "/teams/[teamId]/store", params: { teamId: scopedTeamId } }} asChild>

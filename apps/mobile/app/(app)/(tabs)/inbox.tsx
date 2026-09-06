@@ -93,7 +93,7 @@ export default function InboxTabScreen() {
   const [announcementBody, setAnnouncementBody] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const canSendAnnouncement = role === "captain" || role === "admin";
+  const canSendAnnouncement = role === "admin";
 
   async function loadEventSignups(nextNotifications: Notification[]) {
     const eventIds = Array.from(
@@ -126,6 +126,13 @@ export default function InboxTabScreen() {
   }
 
   async function loadNotifications(nextUnreadOnly: boolean) {
+    if (canSendAnnouncement) {
+      setNotifications([]);
+      setUnreadCount(null);
+      setSignupsByEventId({});
+      setAnnouncementTeams(scopedTeamId ? [] : await getMyTeams({ status: "active" }));
+      return;
+    }
     const [nextNotifications, nextUnreadCount, nextAnnouncementTeams] = await Promise.all([
       getNotifications({ teamId: scopedTeamId, unreadOnly: nextUnreadOnly }),
       getUnreadCount({ teamId: scopedTeamId }),
@@ -153,7 +160,7 @@ export default function InboxTabScreen() {
 
   useEffect(() => {
     void handleLoadNotifications();
-  }, [scopedTeamId]);
+  }, [scopedTeamId, canSendAnnouncement]);
 
   useEffect(() => {
     if (scopedTeamId) {
@@ -321,27 +328,31 @@ export default function InboxTabScreen() {
 
   return (
     <Screen
-      title={`${t("inbox.title")}${unreadCount ? ` (${unreadCount})` : ""}`}
+      title={`${t("inbox.title")}${!canSendAnnouncement && unreadCount ? ` (${unreadCount})` : ""}`}
       refreshing={isLoading}
       onRefresh={() => void handleLoadNotifications()}
       headerRight={
-        <Pressable accessibilityRole="button" onPress={() => void handleMarkAllRead()}>
-          <Text style={styles.markAll}>{t("inbox.markAllRead")}</Text>
-        </Pressable>
+        !canSendAnnouncement ? (
+          <Pressable accessibilityRole="button" onPress={() => void handleMarkAllRead()}>
+            <Text style={styles.markAll}>{t("inbox.markAllRead")}</Text>
+          </Pressable>
+        ) : null
       }
     >
-      <SegmentedControl
-        value={unreadOnly ? "unread" : "all"}
-        onChange={(value) => {
-          if ((value === "unread") !== unreadOnly) {
-            void handleToggleUnreadOnly();
-          }
-        }}
-        options={[
-          { value: "all", label: `${t("inbox.allFilter")}${unreadCount != null ? ` (${unreadCount})` : ""}` },
-          { value: "unread", label: t("inbox.unreadOnly") }
-        ]}
-      />
+      {!canSendAnnouncement ? (
+        <SegmentedControl
+          value={unreadOnly ? "unread" : "all"}
+          onChange={(value) => {
+            if ((value === "unread") !== unreadOnly) {
+              void handleToggleUnreadOnly();
+            }
+          }}
+          options={[
+            { value: "all", label: `${t("inbox.allFilter")}${unreadCount != null ? ` (${unreadCount})` : ""}` },
+            { value: "unread", label: t("inbox.unreadOnly") }
+          ]}
+        />
+      ) : null}
 
       <ScreenState
         loadState={loadState}
@@ -354,9 +365,9 @@ export default function InboxTabScreen() {
         signInLabel={t("home.openLogin")}
       />
 
-      {isEmptyLoad(loadState, notifications.length) && !isLoading ? <EmptyState title={t("inbox.noNotifications")} /> : null}
+      {!canSendAnnouncement && isEmptyLoad(loadState, notifications.length) && !isLoading ? <EmptyState title={t("inbox.noNotifications")} /> : null}
 
-      {notifications.map((notification) => {
+      {!canSendAnnouncement && notifications.map((notification) => {
         const eventSignup = isActionableEventNotification(notification)
           ? signupsByEventId[notification.reference_id]
           : undefined;
@@ -416,45 +427,49 @@ export default function InboxTabScreen() {
         </Card>
       ) : null}
 
-      <Button
-        label={showSettings ? t("inbox.hideDeviceSettings") : t("profile.notificationSettings")}
-        variant="secondary"
-        onPress={() => setShowSettings((value) => !value)}
-      />
-      {showSettings ? (
-        <Card>
-          <Text style={styles.cardTitle}>{t("inbox.pushDevice")}</Text>
-          <TextField
-            autoCapitalize="none"
-            autoCorrect={false}
-            label={t("inbox.deviceToken")}
-            onChangeText={setDeviceToken}
-            value={deviceToken}
-          />
-          <SegmentedControl
-            value={devicePlatform}
-            onChange={setDevicePlatform}
-            options={[
-              { value: "ios", label: "ios" },
-              { value: "android", label: "android" }
-            ]}
-          />
-          <Button disabled={isLoading} label={t("inbox.autoRegisterDevice")} onPress={() => void handleAutoRegisterDeviceToken()} />
+      {!canSendAnnouncement ? (
+        <>
           <Button
-            disabled={isLoading}
-            label={t("inbox.registerDevice")}
+            label={showSettings ? t("inbox.hideDeviceSettings") : t("profile.notificationSettings")}
             variant="secondary"
-            onPress={() => void handleRegisterDeviceToken()}
+            onPress={() => setShowSettings((value) => !value)}
           />
-          {registeredDeviceToken ? (
-            <Button
-              disabled={isLoading}
-              label={t("inbox.deactivateDevice")}
-              variant="danger"
-              onPress={() => void handleDeactivateDeviceToken()}
-            />
+          {showSettings ? (
+            <Card>
+              <Text style={styles.cardTitle}>{t("inbox.pushDevice")}</Text>
+              <TextField
+                autoCapitalize="none"
+                autoCorrect={false}
+                label={t("inbox.deviceToken")}
+                onChangeText={setDeviceToken}
+                value={deviceToken}
+              />
+              <SegmentedControl
+                value={devicePlatform}
+                onChange={setDevicePlatform}
+                options={[
+                  { value: "ios", label: "ios" },
+                  { value: "android", label: "android" }
+                ]}
+              />
+              <Button disabled={isLoading} label={t("inbox.autoRegisterDevice")} onPress={() => void handleAutoRegisterDeviceToken()} />
+              <Button
+                disabled={isLoading}
+                label={t("inbox.registerDevice")}
+                variant="secondary"
+                onPress={() => void handleRegisterDeviceToken()}
+              />
+              {registeredDeviceToken ? (
+                <Button
+                  disabled={isLoading}
+                  label={t("inbox.deactivateDevice")}
+                  variant="danger"
+                  onPress={() => void handleDeactivateDeviceToken()}
+                />
+              ) : null}
+            </Card>
           ) : null}
-        </Card>
+        </>
       ) : null}
     </Screen>
   );

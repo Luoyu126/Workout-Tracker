@@ -37,7 +37,8 @@ export default function StoreTabScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const { selectedTeamId, role, home, loadState: teamLoadState, refresh: refreshTeam } = useTeamContext();
-  const canManageStore = role === "captain" || role === "admin";
+  const canManageStore = role === "admin";
+  const canRedeem = role === "member";
   const [items, setItems] = useState<StoreItem[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
   const [myRedemptions, setMyRedemptions] = useState<Redemption[]>([]);
@@ -62,11 +63,11 @@ export default function StoreTabScreen() {
     }
     const [nextItems, nextBalance, nextMyRedemptions] = await Promise.all([
       getStoreItems(selectedTeamId, { isActive: canManageStore ? itemActiveFilter : true }),
-      getCoinBalance(selectedTeamId),
-      getMyRedemptions(selectedTeamId, { status: myRedemptionStatus })
+      canRedeem ? getCoinBalance(selectedTeamId) : Promise.resolve(null),
+      canRedeem ? getMyRedemptions(selectedTeamId, { status: myRedemptionStatus }) : Promise.resolve([])
     ]);
     setItems(nextItems);
-    setBalance(nextBalance?.balance ?? home?.coin_summary.balance ?? null);
+    setBalance(nextBalance?.balance ?? null);
     setMyRedemptions(nextMyRedemptions);
     if (canManageStore) {
       setManagedRedemptions(await getTeamRedemptions(selectedTeamId, { status: managedRedemptionStatus }));
@@ -79,7 +80,7 @@ export default function StoreTabScreen() {
     itemActiveFilter,
     myRedemptionStatus,
     managedRedemptionStatus,
-    home?.coin_summary.balance
+    canRedeem
   ]);
 
   async function handleLoad() {
@@ -152,7 +153,7 @@ export default function StoreTabScreen() {
   }
 
   async function handleRedeem(item: StoreItem) {
-    if (!selectedTeamId) {
+    if (!selectedTeamId || !canRedeem) {
       return;
     }
     if (!canRedeemItem(item)) {
@@ -265,10 +266,12 @@ export default function StoreTabScreen() {
         <EmptyState title={t("teams.noTeams")} actionLabel={t("home.openLogin")} onAction={() => router.push("/login")} />
       ) : null}
 
-      <Card style={styles.walletCard}>
-        <Text style={styles.walletLabel}>{t("store.walletBalance")}</Text>
-        <Text style={styles.walletValue}>{balance != null ? `${balance.toLocaleString()} COINS` : "--"}</Text>
-      </Card>
+      {canRedeem ? (
+        <Card style={styles.walletCard}>
+          <Text style={styles.walletLabel}>{t("store.walletBalance")}</Text>
+          <Text style={styles.walletValue}>{balance != null ? `${balance.toLocaleString()} COINS` : "--"}</Text>
+        </Card>
+      ) : null}
 
       <Text style={styles.section}>{t("store.hotItems")}</Text>
 
@@ -362,11 +365,13 @@ export default function StoreTabScreen() {
                 <Text style={styles.muted}>
                   {item.stock == null ? "∞" : item.stock} · {item.is_active ? t("store.active") : t("store.inactive")}
                 </Text>
-                <Button
-                  label={t("store.redeem")}
-                  disabled={isLoading || unavailable}
-                  onPress={() => void handleRedeem(item)}
-                />
+                {canRedeem ? (
+                  <Button
+                    label={t("store.redeem")}
+                    disabled={isLoading || unavailable}
+                    onPress={() => void handleRedeem(item)}
+                  />
+                ) : null}
                 {canManageStore ? (
                   <Button
                     label={item.is_active ? t("store.deactivate") : t("store.activate")}
@@ -394,28 +399,32 @@ export default function StoreTabScreen() {
         })}
       </View>
 
-      <Text style={styles.section}>{t("store.myRedemptions")}</Text>
-      <SegmentedControl
-        value={myRedemptionStatus}
-        onChange={setMyRedemptionStatus}
-        options={[
-          { value: null, label: t("store.allRedemptionStatuses") },
-          { value: "pending", label: t("store.status.pending") },
-          { value: "fulfilled", label: t("store.status.fulfilled") }
-        ]}
-      />
-      {teamLoadState.status === "success" && isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
-      {myRedemptions.map((redemption) => (
-        <Card key={redemption.id}>
-          <Badge label={t(`store.status.${redemption.status}`)} />
-          <Text style={styles.cardTitle}>
-            {items.find((item) => item.id === redemption.store_item_id)?.name ?? redemption.store_item_id}
-          </Text>
-          <Text style={styles.muted}>
-            x{redemption.quantity} · {redemption.total_price}
-          </Text>
-        </Card>
-      ))}
+      {canRedeem ? (
+        <>
+          <Text style={styles.section}>{t("store.myRedemptions")}</Text>
+          <SegmentedControl
+            value={myRedemptionStatus}
+            onChange={setMyRedemptionStatus}
+            options={[
+              { value: null, label: t("store.allRedemptionStatuses") },
+              { value: "pending", label: t("store.status.pending") },
+              { value: "fulfilled", label: t("store.status.fulfilled") }
+            ]}
+          />
+          {teamLoadState.status === "success" && isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
+          {myRedemptions.map((redemption) => (
+            <Card key={redemption.id}>
+              <Badge label={t(`store.status.${redemption.status}`)} />
+              <Text style={styles.cardTitle}>
+                {items.find((item) => item.id === redemption.store_item_id)?.name ?? redemption.store_item_id}
+              </Text>
+              <Text style={styles.muted}>
+                x{redemption.quantity} · {redemption.total_price}
+              </Text>
+            </Card>
+          ))}
+        </>
+      ) : null}
 
       {canManageStore ? (
         <>

@@ -690,7 +690,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("announcementTeams");
     expect(source).toContain('getMyTeams({ status: "active" })');
     expect(source).toContain("canSendAnnouncement");
-    expect(source).toContain('role === "captain" || role === "admin"');
+    expect(source).toContain('role === "admin"');
     expect(source).toContain("inbox.captainOnlyHint");
     expect(source).toContain("loadNotifications");
     expect(source).toContain("handleToggleUnreadOnly");
@@ -735,7 +735,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("currentRole");
     expect(source).toContain("setCurrentRole(nextRole)");
     expect(source).toContain("canManageStore");
-    expect(source).toContain('nextRole === "captain" || nextRole === "admin"');
+    expect(source).toContain('nextRole === "admin"');
     expect(source).toContain("!canManageStore");
     expect(functionBody(source, "handleLoadItems")).not.toContain("if (!canManageStore)");
     expect(source).toContain("store.manage");

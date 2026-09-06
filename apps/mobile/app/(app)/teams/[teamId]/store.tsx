@@ -91,7 +91,9 @@ export default function TeamStoreScreen() {
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const canManageStore = currentRole === "captain" || currentRole === "admin";
+  const canManageStore = currentRole === "admin";
+
+  const canRedeem = currentRole === "member";
 
   function applyItems(nextItems: StoreItem[]) {
     setItems(nextItems);
@@ -112,12 +114,12 @@ export default function TeamStoreScreen() {
     if (!teamId) {
       return;
     }
-    const [teamHome, nextMyRedemptions] = await Promise.all([
-      getTeamHome(teamId),
-      getMyRedemptions(teamId, { status: myRedemptionStatus })
-    ]);
+    const teamHome = await getTeamHome(teamId);
+    const nextMyRedemptions = teamHome.current_membership.role === "member"
+      ? await getMyRedemptions(teamId, { status: myRedemptionStatus })
+      : [];
     const nextRole = teamHome.current_membership.role;
-    const canManageWithNextRole = nextRole === "captain" || nextRole === "admin";
+    const canManageWithNextRole = nextRole === "admin";
     const nextItems = await getStoreItems(teamId, { isActive: canManageWithNextRole ? itemActiveFilter : true });
     setCurrentRole(nextRole);
     applyItems(nextItems);
@@ -276,7 +278,7 @@ export default function TeamStoreScreen() {
   }
 
   async function handleRedeem(item: StoreItem) {
-    if (!teamId) {
+    if (!teamId || !canRedeem) {
       return;
     }
     if (!canRedeemItem(item)) {
@@ -686,7 +688,7 @@ export default function TeamStoreScreen() {
               </Pressable>
             </>
           ) : null}
-          {canRedeemItem(item) ? (
+          {canRedeem && (canRedeemItem(item) ? (
             <>
               <TextInput
                 autoCorrect={false}
@@ -713,7 +715,7 @@ export default function TeamStoreScreen() {
             </>
           ) : (
             <Text style={styles.muted}>{t("store.unavailable")}</Text>
-          )}
+          ))}
           {canManageStore ? (
             <View style={styles.row}>
               <Pressable
@@ -738,24 +740,28 @@ export default function TeamStoreScreen() {
           ) : null}
         </View>
       ))}
-      <Text style={styles.sectionTitle}>{t("store.myRedemptions")}</Text>
-      <View style={styles.row}>
-        {redemptionStatuses.map((status) => (
-          <Pressable
-            accessibilityRole="button"
-            disabled={isLoading}
-            key={status ?? "all-my-redemptions"}
-            onPress={() => setMyRedemptionStatus(status)}
-            style={[styles.pillButton, myRedemptionStatus === status && styles.activePill, isLoading && styles.disabled]}
-          >
-            <Text style={styles.secondaryText}>
-              {status === null ? t("store.allRedemptionStatuses") : t(`store.status.${status}`)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      {isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
-      {myRedemptions.map((redemption) => renderRedemption(redemption, { manageable: false }))}
+      {canRedeem ? (
+        <>
+          <Text style={styles.sectionTitle}>{t("store.myRedemptions")}</Text>
+          <View style={styles.row}>
+            {redemptionStatuses.map((status) => (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoading}
+                key={status ?? "all-my-redemptions"}
+                onPress={() => setMyRedemptionStatus(status)}
+                style={[styles.pillButton, myRedemptionStatus === status && styles.activePill, isLoading && styles.disabled]}
+              >
+                <Text style={styles.secondaryText}>
+                  {status === null ? t("store.allRedemptionStatuses") : t(`store.status.${status}`)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
+          {myRedemptions.map((redemption) => renderRedemption(redemption, { manageable: false }))}
+        </>
+      ) : null}
       {canManageStore ? (
         <>
           <Text style={styles.sectionTitle}>{t("store.manageRedemptions")}</Text>
