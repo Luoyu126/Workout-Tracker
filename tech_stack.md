@@ -236,6 +236,8 @@ Historical coin transactions are never edited in place.
 
 ### 6.5 Notifications
 
+The current mobile experience uses the in-app Inbox only. Device notification settings and automatic device token registration/refresh are disabled; remote push stays disabled. DeviceToken storage and device APIs remain available for future integration.
+
 In-app Notification rows may be created in the same transaction as the business action. External push delivery happens after commit and is non-authoritative; a push failure must not undo a successful event, reward, or redemption.
 
 ## 7. Project Directory
@@ -382,7 +384,7 @@ Test:
 Deliver:
 
 - Complete mobile navigation and all MVP screens.
-- Device token registration and in-app notification flows; remote push delivery integration can be enabled with Expo Notifications, FCM, or APNs credentials after provider setup.
+- In-app notification flows are active. Device token storage and APIs are retained for future use; mobile device registration and remote push delivery are deferred.
 - Loading, empty, retry and offline-recovery states.
 - CI checks and release configuration.
 

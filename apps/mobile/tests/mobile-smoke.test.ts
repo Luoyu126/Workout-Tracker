@@ -152,11 +152,9 @@ describe("mobile MVP smoke", () => {
     expect(layoutSource).toContain("router.push(route)");
     expect(layoutSource).toContain("Notification deep-link handling is best-effort");
     expect(layoutSource).toContain("subscription?.remove()");
-    expect(layoutSource).toContain("refreshExpoPushTokenIfGrantedAsync");
-    expect(layoutSource).toContain("registerDeviceToken");
-    expect(layoutSource).toContain("AppState.addEventListener");
-    expect(layoutSource).toContain('nextState === "active"');
-    expect(layoutSource).toContain("Push token refresh is best-effort");
+    expect(layoutSource).not.toContain("refreshExpoPushTokenIfGrantedAsync");
+    expect(layoutSource).not.toContain("registerDeviceToken");
+    expect(layoutSource).not.toContain("AppState.addEventListener");
     expect(layoutSource).toContain("KeyboardAvoidingView");
     expect(layoutSource).toContain('behavior={Platform.OS === "ios" ? "padding" : undefined}');
     expect(layoutSource).toContain("keyboardAvoidingContainer");
@@ -431,7 +429,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("updateProfile(profileInput)");
     expect(source).toContain('router.push("/teams")');
     expect(source).toContain("home.openTeams");
-    expect(source).toContain("profile.notificationSettings");
+    expect(source).not.toContain("profile.notificationSettings");
     for (const handlerName of ["handleSyncProfile", "handleLoadProfile", "handleUpdateProfile", "handleSignOut"]) {
       expect(functionBody(source, handlerName)).toContain("if (isSubmitting)");
     }
@@ -698,13 +696,13 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("await loadNotifications(nextUnreadOnly);");
     expect(source).toContain("getNotifications({ teamId: scopedTeamId, unreadOnly: nextUnreadOnly })");
     expect(source).toContain("getUnreadCount({ teamId: scopedTeamId })");
-    expect(source).toContain("getDefaultDevicePlatform");
-    expect(source).toContain("requestExpoPushTokenAsync");
-    expect(source).toContain("normalizeExpoPushToken");
-    expect(source).toContain("inbox.invalidDeviceToken");
-    expect(source).toContain("inbox.autoRegisterDevice");
-    expect(source).toContain("inbox.notificationPermissionDenied");
-    expect(source).toContain("inbox.notificationUnsupported");
+    expect(source).not.toContain("getDefaultDevicePlatform");
+    expect(source).not.toContain("requestExpoPushTokenAsync");
+    expect(source).not.toContain("normalizeExpoPushToken");
+    expect(source).not.toContain("inbox.invalidDeviceToken");
+    expect(source).not.toContain("inbox.autoRegisterDevice");
+    expect(source).not.toContain("inbox.notificationPermissionDenied");
+    expect(source).not.toContain("inbox.notificationUnsupported");
     expect(source).toContain("inbox.sendAnnouncement");
     expect(source).toContain("inbox.announcementSent");
     expect(source).toContain('reference_type === "event"');

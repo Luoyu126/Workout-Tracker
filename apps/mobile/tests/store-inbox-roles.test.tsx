@@ -107,10 +107,10 @@ test("admin inbox contains only announcement controls", async () => {
   }
   expect(h.notifications).not.toHaveBeenCalled(); expect(h.unread).not.toHaveBeenCalled();
 });
-test("member inbox retains filters and device settings", async () => {
+test("member inbox retains filters without device settings", async () => {
   h.role = "member";
   const ui = await render(Inbox);
   expect(ui).toContain("inbox.allFilter"); expect(ui).toContain("inbox.unreadOnly");
-  expect(ui).toContain("profile.notificationSettings"); expect(ui).not.toContain("inbox.sendAnnouncement");
+  expect(ui).not.toContain("profile.notificationSettings"); expect(ui).not.toContain("inbox.sendAnnouncement");
   expect(h.notifications).toHaveBeenCalledOnce(); expect(h.unread).toHaveBeenCalledOnce();
 });

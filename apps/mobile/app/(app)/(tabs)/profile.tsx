@@ -204,11 +204,6 @@ export default function ProfileTabScreen() {
         leftIcon="create-outline"
         onPress={() => setEditing((value) => !value)}
       />
-      <ListRow
-        title={t("profile.notificationSettings")}
-        leftIcon="notifications-outline"
-        onPress={() => router.push("/inbox")}
-      />
 
       {editing ? (
         <Card>

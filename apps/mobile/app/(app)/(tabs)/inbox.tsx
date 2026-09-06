@@ -7,20 +7,11 @@ import { Badge, Button, Card, EmptyState, Screen, SegmentedControl, TextField } 
 import { getMySignup, type EventSignup, type SignupStatus } from "@/features/events/api";
 import {
   createTeamAnnouncement,
-  deactivateDeviceToken,
   getNotifications,
   getUnreadCount,
   markNotificationRead,
-  registerDeviceToken,
-  type DevicePlatform,
-  type DeviceToken,
   type Notification
 } from "@/features/notifications/api";
-import {
-  getDefaultDevicePlatform,
-  normalizeExpoPushToken,
-  requestExpoPushTokenAsync
-} from "@/features/notifications/deviceToken";
 import { getMyTeams, type Team } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
@@ -83,10 +74,6 @@ export default function InboxTabScreen() {
   const [signupsByEventId, setSignupsByEventId] = useState<Record<string, EventSignup>>({});
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [deviceToken, setDeviceToken] = useState("");
-  const [devicePlatform, setDevicePlatform] = useState<DevicePlatform>(() => getDefaultDevicePlatform());
-  const [registeredDeviceToken, setRegisteredDeviceToken] = useState<DeviceToken | null>(null);
   const [announcementTeams, setAnnouncementTeams] = useState<Team[]>([]);
   const [announcementTeamId, setAnnouncementTeamId] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
@@ -190,68 +177,6 @@ export default function InboxTabScreen() {
         await markNotificationRead(item.id);
       }
       await loadNotifications(unreadOnly);
-    } catch (error) {
-      setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleRegisterDeviceToken() {
-    const normalizedDeviceToken = normalizeExpoPushToken(deviceToken);
-    if (normalizedDeviceToken === null) {
-      setMessage(t("inbox.invalidDeviceToken"));
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const nextDeviceToken = await registerDeviceToken(normalizedDeviceToken, devicePlatform);
-      setRegisteredDeviceToken(nextDeviceToken);
-      setDeviceToken(nextDeviceToken.token);
-      setMessage(t("inbox.deviceRegistered"));
-    } catch (error) {
-      setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleAutoRegisterDeviceToken() {
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const registration = await requestExpoPushTokenAsync();
-      if (registration.status === "denied") {
-        setMessage(t("inbox.notificationPermissionDenied"));
-        return;
-      }
-      if (registration.status !== "registered") {
-        setMessage(t("inbox.notificationUnsupported"));
-        return;
-      }
-      const nextDeviceToken = await registerDeviceToken(registration.token, registration.platform);
-      setRegisteredDeviceToken(nextDeviceToken);
-      setDeviceToken(nextDeviceToken.token);
-      setDevicePlatform(nextDeviceToken.platform);
-      setMessage(t("inbox.deviceRegistered"));
-    } catch (error) {
-      setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleDeactivateDeviceToken() {
-    if (!registeredDeviceToken) {
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      await deactivateDeviceToken(registeredDeviceToken.id);
-      setRegisteredDeviceToken(null);
-      setMessage(t("inbox.deviceDeactivated"));
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -427,50 +352,6 @@ export default function InboxTabScreen() {
         </Card>
       ) : null}
 
-      {!canSendAnnouncement ? (
-        <>
-          <Button
-            label={showSettings ? t("inbox.hideDeviceSettings") : t("profile.notificationSettings")}
-            variant="secondary"
-            onPress={() => setShowSettings((value) => !value)}
-          />
-          {showSettings ? (
-            <Card>
-              <Text style={styles.cardTitle}>{t("inbox.pushDevice")}</Text>
-              <TextField
-                autoCapitalize="none"
-                autoCorrect={false}
-                label={t("inbox.deviceToken")}
-                onChangeText={setDeviceToken}
-                value={deviceToken}
-              />
-              <SegmentedControl
-                value={devicePlatform}
-                onChange={setDevicePlatform}
-                options={[
-                  { value: "ios", label: "ios" },
-                  { value: "android", label: "android" }
-                ]}
-              />
-              <Button disabled={isLoading} label={t("inbox.autoRegisterDevice")} onPress={() => void handleAutoRegisterDeviceToken()} />
-              <Button
-                disabled={isLoading}
-                label={t("inbox.registerDevice")}
-                variant="secondary"
-                onPress={() => void handleRegisterDeviceToken()}
-              />
-              {registeredDeviceToken ? (
-                <Button
-                  disabled={isLoading}
-                  label={t("inbox.deactivateDevice")}
-                  variant="danger"
-                  onPress={() => void handleDeactivateDeviceToken()}
-                />
-              ) : null}
-            </Card>
-          ) : null}
-        </>
-      ) : null}
     </Screen>
   );
 }
