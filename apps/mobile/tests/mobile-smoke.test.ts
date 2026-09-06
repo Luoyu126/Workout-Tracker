@@ -947,6 +947,9 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("toggleSignupBoardEventType");
     expect(source).toContain("version !== requestVersion.current");
     expect(source).toContain("[teamId, period, eventTypes, t]");
+    for (const layout of ["app/_layout.tsx", "app/(app)/_layout.tsx"]) {
+      expect(readFileSync(resolve(appRoot, layout), "utf-8")).toContain('headerBackButtonDisplayMode: "minimal"');
+    }
     expect(teamsSource).toContain("/teams/[teamId]/signup-board");
     expect(teamHomeSource).toContain("/teams/[teamId]/signup-board");
   });

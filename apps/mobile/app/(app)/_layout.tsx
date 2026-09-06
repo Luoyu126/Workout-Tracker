@@ -6,8 +6,10 @@ export default function ProtectedAppLayout() {
   return (
     <Stack
       screenOptions={{
+        title: "",
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
+        headerBackButtonDisplayMode: "minimal",
         headerTitleStyle: { fontWeight: "700" },
         contentStyle: { backgroundColor: colors.background },
         headerShadowVisible: false

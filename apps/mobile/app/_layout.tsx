@@ -116,7 +116,7 @@ function AppNavigator() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.keyboardAvoidingContainer}
     >
-      <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
+      <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal", contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Protected guard={status !== "ready"}>
           <Stack.Screen name="login" options={{ headerShown: false }} />
         </Stack.Protected>
