@@ -12,7 +12,7 @@ import {
   type SignUpInput,
   type SyncProfileInput
 } from "@/features/auth/api";
-import { profileCheckFailureStatus, type AuthStatus } from "@/features/auth/state";
+import { profileCheckFailureStatus, startupSessionFailureStatus, type AuthStatus } from "@/features/auth/state";
 import { supabase } from "@/lib/supabase/client";
 
 export type { AuthStatus } from "@/features/auth/state";
@@ -95,6 +95,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     mountedRef.current = true;
+    const startupVersion = requestVersionRef.current;
+    const isCurrentStartup = () => mountedRef.current && startupVersion === requestVersionRef.current;
+    const handleStartupFailure = (sessionError: unknown) => {
+      if (!isCurrentStartup()) {
+        return;
+      }
+      if (startupSessionFailureStatus(sessionError) === "signedOut") {
+        // Supabase removes rejected refresh credentials from its session storage.
+        // Only reset the app state here; no remote/global sign-out is needed.
+        resetSignedOutState();
+      } else {
+        commitState("error", sessionError);
+      }
+    };
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
         resetSignedOutState();
@@ -111,13 +125,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void supabase.auth
       .getSession()
       .then(({ data: sessionData, error: sessionError }) => {
+        // SIGNED_OUT or a newer session validation may have completed while
+        // getSession was refreshing the saved credentials.
+        if (!isCurrentStartup()) {
+          return;
+        }
         if (sessionError) {
-          commitState("error", sessionError);
+          handleStartupFailure(sessionError);
           return;
         }
         return validateSession(sessionData.session, true).catch(() => undefined);
       })
-      .catch((sessionError: unknown) => commitState("error", sessionError));
+      .catch(handleStartupFailure);
 
     return () => {
       mountedRef.current = false;
