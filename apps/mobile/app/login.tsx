@@ -187,7 +187,7 @@ export default function LoginScreen() {
             autoComplete="email"
             autoCorrect={false}
             keyboardType="email-address"
-            label={t("auth.emailOrStudentId")}
+            label={t("auth.email")}
             onChangeText={setEmail}
             placeholder={t("auth.email")}
             textContentType="emailAddress"
