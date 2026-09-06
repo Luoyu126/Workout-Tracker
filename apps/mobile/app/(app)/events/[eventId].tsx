@@ -142,7 +142,7 @@ export default function EventDetailScreen() {
     }
   }, [eventId]);
 
-  const canUpdateSignup = currentRole === "member" && event?.status === "published" && isSignupOpen(event.start_time);
+  const canUpdateSignup = currentRole === "member" && event?.status === "published" && isSignupOpen(event.end_time);
   const canManageEventStatus = event?.status === "published";
   const canManageEventRole = currentRole === "admin";
   const canManageEvent = canManageEventStatus && canManageEventRole;

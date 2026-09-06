@@ -362,7 +362,7 @@ EventSignup = 计划参与状态
 * 新报名默认是 `maybe`。
 * `not_going` 必须填写非空 `note`。
 * 只有在活动所属球队中拥有 `active` `role=member` 成员关系的用户可以创建或更新报名。球队管理员明确不具备报名资格。
-* 只有当活动处于 `published` 时，才允许修改报名。
+* 只有当活动处于 `published` 且当前时间早于 `Event.end_time` 时，才允许创建或修改报名；活动开始后仍可报名，到达结束时间即禁止修改。
 * 活动进入 `completed` 后，报名不可变。
 * 完成活动时，没有 `EventSignup` 记录的成员按 `maybe` 处理；系统不会为缺席或出勤额外插入记录。
 

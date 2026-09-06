@@ -659,7 +659,7 @@ PUT /api/v1/events/{event_id}/signup
 
 - 仅 active 且 role=member 的球队成员可操作自己的报名；admin 不可报名。
 - 活动必须为 published。
-- 当前时间不得超过活动 start_time。
+- 当前时间必须早于活动 `end_time`；活动开始后仍可报名。`now >= end_time` 时，即使活动尚未自动转为 completed，也拒绝创建或修改报名（409 `EVENT_STATE_CONFLICT`）。
 - not_going 必须有非空 note。
 - 使用 (event_id, user_id) 唯一约束做 upsert。
 

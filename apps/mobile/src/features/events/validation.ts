@@ -25,12 +25,12 @@ export function isValidEventSchedule(startTime: string, endTime: string) {
   return endTimestamp > startTimestamp;
 }
 
-export function isSignupOpen(startTime: string, now: Date = new Date()) {
-  const deadlineTimestamp = Date.parse(startTime);
-  if (Number.isNaN(deadlineTimestamp)) {
+export function isSignupOpen(endTime: string, now: Date = new Date()) {
+  const endTimestamp = Date.parse(endTime);
+  if (Number.isNaN(endTimestamp)) {
     return false;
   }
-  return now.getTime() <= deadlineTimestamp;
+  return now.getTime() < endTimestamp;
 }
 
 export function parseNonNegativeInteger(value: string) {

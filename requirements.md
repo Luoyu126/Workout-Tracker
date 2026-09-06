@@ -129,7 +129,7 @@ published → hard delete
 
 默认状态为 `maybe`。选择 `not_going` 时必须在 `note` 中填写原因。每名用户对同一活动最多一条报名记录。
 
-队员只能在活动为 `published` 时修改自己的报名。活动 `completed` 后不能再修改。
+队员只能在活动为 `published` 且当前时间早于 `end_time` 时创建或修改自己的报名，活动开始后仍可报名。到达结束时间（`now >= end_time`）或活动 `completed` 后不能再修改。
 
 ### 6.5 完成活动与奖励结算
 

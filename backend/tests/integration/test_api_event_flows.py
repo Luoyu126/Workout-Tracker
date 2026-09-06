@@ -262,3 +262,36 @@ def test_completed_events_are_immutable_and_completion_is_idempotent(session: Se
     with pytest.raises(HTTPException) as delete_error:
         delete_event_route(event.id, admin, session)
     assert delete_error.value.status_code == 409
+
+
+@pytest.mark.parametrize("seconds_before_end", [1, 0, -1])
+@pytest.mark.parametrize("existing_signup", [False, True])
+def test_signup_end_boundary_after_start(
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds_before_end: int,
+    existing_signup: bool,
+) -> None:
+    team, admin, member = _seed_team(session)
+    event = post_event(team.id, _payload(), admin, session)
+    if existing_signup:
+        put_my_signup(
+            event.id, EventSignupUpsertRequest(status=SignupStatus.maybe), member, session
+        )
+    now = datetime.now(UTC)
+    event.start_time = now - timedelta(hours=1)
+    event.end_time = now + timedelta(seconds=seconds_before_end)
+    session.commit()
+    monkeypatch.setattr(
+        "app.events.service._now_for",
+        lambda value: now if value.tzinfo else now.replace(tzinfo=None),
+    )
+    payload = EventSignupUpsertRequest(status=SignupStatus.going)
+    if seconds_before_end > 0:
+        signup = put_my_signup(event.id, payload, member, session)
+        session.expire_all()
+        assert session.get(type(signup), signup.id).status == SignupStatus.going
+    else:
+        with pytest.raises(HTTPException) as error:
+            put_my_signup(event.id, payload, member, session)
+        assert error.value.status_code == 409

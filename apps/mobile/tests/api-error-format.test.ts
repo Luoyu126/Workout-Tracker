@@ -38,7 +38,7 @@ const zhMessages: Partial<Record<TranslationKey, string>> = {
   "common.insufficientCoins": "金币余额不足",
   "common.insufficientStock": "库存不足",
   "common.matchOpponentRequired": "发布比赛前请先填写对手",
-  "common.signupDeadlinePassed": "报名截止时间已过",
+  "common.signupEventEnded": "活动已结束，不能修改报名",
   "common.error": "操作失败"
 };
 
@@ -77,8 +77,8 @@ describe("formatApiError", () => {
     expect(formatApiError(new TestApiError("Match opponent is required before publishing", 409, "EVENT_STATE_CONFLICT"), zh)).toBe(
       "发布比赛前请先填写对手"
     );
-    expect(formatApiError(new TestApiError("Signup deadline has passed", 409, "EVENT_STATE_CONFLICT"), zh)).toBe(
-      "报名截止时间已过"
+    expect(formatApiError(new TestApiError("Signup is closed because the event has ended", 409, "EVENT_STATE_CONFLICT"), zh)).toBe(
+      "活动已结束，不能修改报名"
     );
     expect(formatApiError(new TestApiError("Team must keep one active admin", 409, "LAST_ADMIN_REQUIRED"), zh)).toBe(
       "球队至少需要保留一名有效管理员"

@@ -507,7 +507,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("events.signupNoteRequired");
     expect(source).toContain("canUpdateSignup");
     expect(source).toContain('event?.status === "published"');
-    expect(source).toContain("isSignupOpen(event.start_time)");
+    expect(source).toContain("isSignupOpen(event.end_time)");
     expect(source).toContain("events.signupReadonly");
     expect(functionBody(source, "handleSubmitSignup")).toContain("if (!canUpdateSignup)");
     expect(functionBody(source, "handleSubmitSignup")).toContain('showError(t("events.signupReadonly"))');

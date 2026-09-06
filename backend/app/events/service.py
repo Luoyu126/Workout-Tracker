@@ -464,7 +464,7 @@ def upsert_my_signup(
     payload: EventSignupUpsertRequest,
 ) -> EventSignup:
     with transaction_boundary(session):
-        event = _get_event(session, event_id)
+        event = _get_event_for_update(session, event_id)
         membership = get_active_membership(
             session,
             event.team_id,
@@ -480,8 +480,8 @@ def upsert_my_signup(
             )
         if event.status != EventStatus.published:
             raise SignupRuleError("Signup requires a published event")
-        if _now_for(event.start_time) > event.start_time:
-            raise SignupRuleError("Signup deadline has passed")
+        if _now_for(event.end_time) >= event.end_time:
+            raise SignupRuleError("Signup is closed because the event has ended")
         signup = repository.find_signup(session, event_id, user.id)
         if signup is None:
             signup = EventSignup(event_id=event_id, user_id=user.id, status=payload.status, note=payload.note)

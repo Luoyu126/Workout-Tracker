@@ -19,7 +19,7 @@ const errorMessageTranslations: Partial<Record<string, TranslationKey>> = {
   "Only pending redemptions can be cancelled": "common.redemptionNotPending",
   "Only fulfilled redemptions can be refunded": "common.redemptionNotFulfilled",
   "Match opponent is required before publishing": "common.matchOpponentRequired",
-  "Signup deadline has passed": "common.signupDeadlinePassed",
+  "Signup is closed because the event has ended": "common.signupEventEnded",
   "Signup requires a published event": "common.eventNotPublished",
   "Completed events cannot be modified": "common.completedEventReadOnly",
   "Completed events cannot be deleted": "common.completedEventReadOnly",
