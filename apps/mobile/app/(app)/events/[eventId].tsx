@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Link, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -435,24 +436,8 @@ export default function EventDetailScreen() {
               style={[styles.input, styles.multilineInput]}
               value={editDescription}
             />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setEditStartTime}
-              placeholder={t("events.startTime")}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={editStartTime}
-            />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setEditEndTime}
-              placeholder={t("events.endTime")}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={editEndTime}
-            />
+            <DateTimeField label={t("events.startTime")} value={editStartTime} onChange={setEditStartTime} disabled={isLoading} />
+            <DateTimeField label={t("events.endTime")} value={editEndTime} onChange={setEditEndTime} disabled={isLoading} />
             {event.type === "match" ? (
               <View style={styles.matchDetailsForm}>
                 <Text style={styles.cardTitle}>{t("events.matchDetails")}</Text>

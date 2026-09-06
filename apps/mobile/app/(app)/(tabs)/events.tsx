@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -192,20 +193,8 @@ export default function EventsTabScreen() {
           <TextField label={t("events.titleField")} onChangeText={setTitle} value={title} />
           <TextField label={t("events.location")} onChangeText={setLocation} value={location} />
           <TextField label={t("events.description")} multiline onChangeText={setDescription} value={description} />
-          <TextField
-            autoCapitalize="none"
-            autoCorrect={false}
-            label={t("events.startTime")}
-            onChangeText={setStartTime}
-            value={startTime}
-          />
-          <TextField
-            autoCapitalize="none"
-            autoCorrect={false}
-            label={t("events.endTime")}
-            onChangeText={setEndTime}
-            value={endTime}
-          />
+          <DateTimeField label={t("events.startTime")} value={startTime} onChange={setStartTime} disabled={isLoading} />
+          <DateTimeField label={t("events.endTime")} value={endTime} onChange={setEndTime} disabled={isLoading} />
           {eventType === "match" ? (
             <>
               <TextField autoCorrect={false} label={t("events.opponent")} onChangeText={setOpponent} value={opponent} />

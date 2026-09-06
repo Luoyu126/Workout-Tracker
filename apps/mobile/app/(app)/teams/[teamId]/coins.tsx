@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -401,24 +402,8 @@ export default function TeamCoinsScreen() {
           ))}
         </View>
         <View style={styles.row}>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setCreatedAfter}
-            placeholder={t("coins.createdAfter")}
-            placeholderTextColor={colors.muted}
-            style={[styles.input, styles.rowInput]}
-            value={createdAfter}
-          />
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setCreatedBefore}
-            placeholder={t("coins.createdBefore")}
-            placeholderTextColor={colors.muted}
-            style={[styles.input, styles.rowInput]}
-            value={createdBefore}
-          />
+          <DateTimeField label={t("coins.createdAfter")} value={createdAfter} onChange={setCreatedAfter} disabled={isLoading} />
+          <DateTimeField label={t("coins.createdBefore")} value={createdBefore} onChange={setCreatedBefore} disabled={isLoading} />
         </View>
         {isEmptyLoad(loadState, transactions.length) ? (
           <Text style={styles.muted}>{t("coins.noTransactions")}</Text>

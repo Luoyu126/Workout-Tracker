@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Link, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -263,24 +264,8 @@ export default function TeamEventsScreen() {
           style={styles.input}
           value={location}
         />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setStartTime}
-          placeholder={t("events.startTime")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={startTime}
-        />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setEndTime}
-          placeholder={t("events.endTime")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={endTime}
-        />
+        <DateTimeField label={t("events.startTime")} value={startTime} onChange={setStartTime} disabled={isLoading} />
+        <DateTimeField label={t("events.endTime")} value={endTime} onChange={setEndTime} disabled={isLoading} />
         {eventType === "match" ? (
           <>
             <TextInput
@@ -369,24 +354,8 @@ export default function TeamEventsScreen() {
             </Pressable>
           ))}
         </View>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setStartsAfter}
-          placeholder={t("events.startsAfter")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={startsAfter}
-        />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setStartsBefore}
-          placeholder={t("events.startsBefore")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={startsBefore}
-        />
+        <DateTimeField label={t("events.startsAfter")} value={startsAfter} onChange={setStartsAfter} disabled={isLoading} />
+        <DateTimeField label={t("events.startsBefore")} value={startsBefore} onChange={setStartsBefore} disabled={isLoading} />
       </View>
       {events.map((event) => (
         <View key={event.id} style={styles.card}>

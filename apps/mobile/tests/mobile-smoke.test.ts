@@ -534,7 +534,8 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("editEndTime");
     expect(source).toContain("editMatchResult === result && styles.activeButton");
     expect(source).toContain("isLoading && styles.disabled");
-    expect(source).toContain("autoCorrect={false}");
+    expect(source).toContain('<DateTimeField label={t("events.startTime")}');
+    expect(source).toContain('<DateTimeField label={t("events.endTime")}');
     expect(source).toContain("style={[styles.secondaryButton, isLoading && styles.disabled]}");
     expect(source).toContain("style={[styles.dangerButton, isLoading && styles.disabled]}");
     expect(source).toContain("end_time: parsedEndTime");
@@ -611,7 +612,7 @@ describe("mobile MVP smoke", () => {
       "events.startsAfter",
       "events.startsBefore"
     ]) {
-      expect(source.split(`placeholder={t("${key}")}`)[0].slice(-220)).toContain("autoCorrect={false}");
+      expect(source).toContain(`<DateTimeField label={t("${key}")}`);
     }
     expect(source.split('placeholder={t("events.opponent")}')[0].slice(-180)).toContain("autoCorrect={false}");
     expect(functionBody(source, "handleCreateEvent")).toContain('setTitle("");');
