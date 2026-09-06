@@ -460,7 +460,7 @@ GET /api/v1/teams/{team_id}/home
 - current_membership：当前用户在该球队的 active TeamMembership，用于前端判断 member/admin UI 能力。
 - admins：active admin 成员列表。
 - member_count：active 成员数量。
-- upcoming_events：近期 published 活动。
+- upcoming_events：当前球队尚未结束的 published 活动（`end_time > now`），包含正在进行的活动，按 `start_time` 升序最多返回 5 条；active member/admin 均可查看。每条包含 `id`、`type`、`title`、`location`、`start_time`、`end_time`、`status`。首页取第一条，并根据 `start_time <= now < end_time` 展示进行中标注。
 - signup_summary：已完成活动上 EventSignup 的聚合，形如 `{going, maybe, not_going, total}`。
 - coin_summary：CoinTransaction 聚合。
 

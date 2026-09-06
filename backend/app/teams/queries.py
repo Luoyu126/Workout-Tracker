@@ -119,7 +119,7 @@ def load_team_home_data(session: Session, *, team_id: UUID, user_id: UUID) -> Te
             .where(
                 Event.team_id == team_id,
                 Event.status == EventStatus.published,
-                Event.start_time >= datetime.now(UTC),
+                Event.end_time > datetime.now(UTC),
             )
             .order_by(Event.start_time)
             .limit(5)

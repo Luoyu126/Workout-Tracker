@@ -61,6 +61,10 @@ export default function HomeScreen() {
   }, [home]);
 
   const nextEvent = home?.upcoming_events[0] ?? null;
+  const now = Date.now();
+  const isEventInProgress = nextEvent !== null
+    && new Date(nextEvent.start_time).getTime() <= now
+    && now < new Date(nextEvent.end_time).getTime();
   const message = signupMessage ?? (error ? formatApiError(error, t) : null);
 
   useFocusEffect(
@@ -173,10 +177,17 @@ export default function HomeScreen() {
       {nextEvent ? (
         <Card accentBorder>
           <View style={styles.eventHeader}>
-            <Badge
-              label={nextEvent.type === "match" ? t("events.match") : t("events.training")}
-              tone={nextEvent.type === "match" ? "purple" : "accent"}
-            />
+            <View style={styles.eventTypeGroup}>
+              <Badge
+                label={nextEvent.type === "match" ? t("events.match") : t("events.training")}
+                tone={nextEvent.type === "match" ? "purple" : "accent"}
+              />
+              {isEventInProgress && nextEvent.type !== "other" ? (
+                <Text style={styles.eventInProgress}>
+                  {t(nextEvent.type === "match" ? "home.matchInProgress" : "home.trainingInProgress")}
+                </Text>
+              ) : null}
+            </View>
             <Text style={styles.eventWhen}>{formatEventWhen(nextEvent.start_time, locale)}</Text>
           </View>
           <Text style={styles.eventTitle}>{nextEvent.title}</Text>
@@ -316,7 +327,23 @@ const styles = StyleSheet.create({
   eventHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  eventTypeGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: spacing.sm,
+    gap: 4
+  },
+  eventInProgress: {
+    alignSelf: "flex-start",
+    marginTop: -spacing.sm,
+    backgroundColor: colors.surface,
+    color: colors.danger,
+    ...typography.caption,
+    fontWeight: "700"
   },
   eventWhen: {
     color: colors.muted,

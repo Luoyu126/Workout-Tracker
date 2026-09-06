@@ -23,6 +23,7 @@ from app.common.enums import (
 from app.models import CoinTransaction, Event, EventSignup, Organization, Team, TeamMembership, User
 from app.organizations.router import read_my_organizations
 from app.teams.router import read_team_home
+from app.teams.schemas import TeamHomeRead
 from app.users.router import current_user, read_current_user, sync_current_user, update_current_user
 from app.users.schemas import UserSyncRequest, UserUpdateRequest
 
@@ -148,7 +149,9 @@ def test_organizations_router_lists_only_active_membership_active_team_orgs(sess
     assert organizations == [active_org]
 
 
-def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Session) -> None:
+def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(
+    session: Session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     user = User(auth_id=uuid4(), name="首页用户", email="home-user@example.com")
     admin = User(auth_id=uuid4(), name="首页队长", email="home-admin@example.com")
     organization = Organization(name="Home Org", slug=f"home-org-{uuid4().hex[:8]}")
@@ -177,6 +180,12 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
     session.flush()
 
     now = datetime.now(UTC)
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr("app.teams.queries.datetime", FrozenDatetime)
     upcoming = Event(
         team_id=team.id,
         type=EventType.training,
@@ -195,7 +204,30 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
         status=EventStatus.completed,
         created_by=admin.id,
     )
-    session.add_all([upcoming, completed])
+    ongoing = Event(
+        team_id=team.id, type=EventType.training, title="正在训练",
+        start_time=now - timedelta(hours=1), end_time=now + timedelta(hours=1),
+        status=EventStatus.published, created_by=admin.id,
+    )
+    just_started = Event(
+        team_id=team.id, type=EventType.match, title="刚开始的比赛",
+        start_time=now, end_time=now + timedelta(hours=2),
+        status=EventStatus.published, created_by=admin.id,
+    )
+    just_ended = Event(
+        team_id=team.id, type=EventType.training, title="已结束待结算",
+        start_time=now - timedelta(hours=2), end_time=now,
+        status=EventStatus.published, created_by=admin.id,
+    )
+    other_team = Team(organization_id=organization.id, name="Other Team")
+    session.add(other_team)
+    session.flush()
+    foreign_event = Event(
+        team_id=other_team.id, type=EventType.training, title="其他球队训练",
+        start_time=now - timedelta(hours=1), end_time=now + timedelta(hours=1),
+        status=EventStatus.published, created_by=admin.id,
+    )
+    session.add_all([upcoming, completed, ongoing, just_started, just_ended, foreign_event])
     session.flush()
     session.add_all(
         [
@@ -234,7 +266,13 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(session: Ses
     assert home["current_membership"].user_id == user.id
     assert home["current_membership"].role == MembershipRole.member
     assert home["member_count"] == 2
-    assert [event["title"] for event in home["upcoming_events"]] == ["明天训练"]
+    assert [event["title"] for event in home["upcoming_events"]] == [
+        "正在训练", "刚开始的比赛", "明天训练",
+    ]
+    assert home["upcoming_events"][0]["end_time"] == ongoing.end_time
+    admin_home = read_team_home(team.id, admin, session)
+    assert admin_home["upcoming_events"] == home["upcoming_events"]
+    assert TeamHomeRead.model_validate(admin_home).upcoming_events[0].id == ongoing.id
     assert home["signup_summary"] == {
         "going": 1,
         "maybe": 0,

@@ -2344,6 +2344,57 @@
         "title": "TeamAnnouncementRequest",
         "type": "object"
       },
+      "TeamHomeEventRead": {
+        "properties": {
+          "end_time": {
+            "format": "date-time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "start_time": {
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "location",
+          "start_time",
+          "end_time",
+          "status"
+        ],
+        "title": "TeamHomeEventRead",
+        "type": "object"
+      },
       "TeamHomeRead": {
         "properties": {
           "admins": {
@@ -2379,8 +2430,7 @@
           },
           "upcoming_events": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/TeamHomeEventRead"
             },
             "title": "Upcoming Events",
             "type": "array"

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.common.enums import MembershipRole, MembershipStatus, TeamStatus
+from app.common.enums import EventStatus, EventType, MembershipRole, MembershipStatus, TeamStatus
 from app.common.validation import stripped_non_blank, stripped_optional_text
 
 
@@ -108,12 +108,22 @@ class MembershipUpdateRequest(BaseModel):
         return stripped_optional_text(value)
 
 
+class TeamHomeEventRead(BaseModel):
+    id: UUID
+    type: EventType
+    title: str
+    location: str | None
+    start_time: datetime
+    end_time: datetime
+    status: EventStatus
+
+
 class TeamHomeRead(BaseModel):
     team: TeamRead
     current_membership: MembershipRead
     admins: list[MembershipRead]
     member_count: int
-    upcoming_events: list[dict[str, object]]
+    upcoming_events: list[TeamHomeEventRead]
     signup_summary: dict[str, int]
     coin_summary: dict[str, int]
 

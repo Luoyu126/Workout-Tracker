@@ -95,6 +95,7 @@ export type TeamHome = {
     title: string;
     location: string | null;
     start_time: string;
+    end_time: string;
     status: "published";
   }>;
   signup_summary: {

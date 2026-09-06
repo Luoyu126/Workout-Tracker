@@ -330,6 +330,7 @@ def build_team_home(session: Session, team_id: UUID, user: User) -> dict[str, ob
                 "title": event.title,
                 "location": event.location,
                 "start_time": event.start_time,
+                "end_time": event.end_time,
                 "status": enum_value(event.status),
             }
             for event in data.upcoming_events

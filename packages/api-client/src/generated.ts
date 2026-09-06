@@ -56,6 +56,7 @@ export const apiSchemaNames = [
   "StoreItemRead",
   "StoreItemUpdateRequest",
   "TeamAnnouncementRequest",
+  "TeamHomeEventRead",
   "TeamHomeRead",
   "TeamRead",
   "TeamSearchResultRead",

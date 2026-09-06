@@ -1,10 +1,10 @@
 import { isValidElement, type ReactNode } from "react";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   states: [] as unknown[], refs: [] as { current: unknown }[], index: 0, refIndex: 0, focusIndex: 0,
   focus: [] as (() => void | (() => void))[], signup: vi.fn(), refresh: vi.fn(), push: vi.fn(), role: "admin",
-  events: [] as { id: string; title: string; type: string; start_time: string; location: string }[]
+  events: [] as { id: string; title: string; type: string; start_time: string; end_time: string; location: string }[]
 }));
 vi.mock("react", async (original) => ({
   ...await original<typeof import("react")>(),
@@ -57,10 +57,26 @@ function text(node: ReactNode): string {
 }
 function render() { h.index = 0; h.refIndex = 0; h.focusIndex = 0; return Home(); }
 async function focus() { h.focus.forEach((fn) => fn()); for (let i = 0; i < 10; i++) await Promise.resolve(); }
-const upcoming = { id: "event", title: "Tomorrow training", type: "training", start_time: "2099-09-10T10:00:00Z", location: "Pitch" };
+const upcoming = { id: "event", title: "Tomorrow training", type: "training", start_time: "2099-09-10T10:00:00Z", end_time: "2099-09-10T12:00:00Z", location: "Pitch" };
 beforeEach(() => {
   vi.resetAllMocks(); h.states = []; h.refs = []; h.focus = []; h.role = "admin"; h.events = [upcoming];
   h.signup.mockResolvedValue({ status: "going" });
+});
+afterEach(() => { vi.restoreAllMocks(); });
+test.each([
+  ["training", "admin", "10:00:00", "home.trainingInProgress"],
+  ["match", "admin", "11:00:00", "home.matchInProgress"],
+  ["training", "member", "11:00:00", "home.trainingInProgress"]
+])("%s in progress is marked for %s at %s", (type, role, time, label) => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse(`2099-09-10T${time}Z`));
+  h.events = [{ ...upcoming, type }]; h.role = role;
+  expect(text(render())).toContain(label);
+});
+test.each(["09:59:59", "12:00:00", "12:00:01"])("no in-progress marker outside the event at %s", (time) => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse(`2099-09-10T${time}Z`));
+  const ui = text(render());
+  expect(ui).not.toContain("home.trainingInProgress");
+  expect(ui).not.toContain("home.matchInProgress");
 });
 test("admin sees upcoming event and a full-row attendance card without coins or signup actions", async () => {
   render(); await focus(); const ui = render();
