@@ -210,8 +210,13 @@ describe("mobile MVP smoke", () => {
     for (const [route, loader] of autoLoadExpectations) {
       const source = readFileSync(resolve(appRoot, route), "utf-8");
 
-      expect(source).toContain("useEffect");
-      expect(source).toContain(`void ${loader}();`);
+      if (route === "app/(app)/teams/[teamId]/events.tsx") {
+        expect(source).toContain("useFocusEffect");
+        expect(source).toContain("void loadOnFocus.current();");
+      } else {
+        expect(source).toContain("useEffect");
+        expect(source).toContain(`void ${loader}();`);
+      }
     }
 
     const homeSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
@@ -556,75 +561,28 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("canCompleteEvent");
   });
 
-  test("event creation exposes scheduling and match notes fields", () => {
-    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events.tsx"), "utf-8");
-    const validationSource = readFileSync(resolve(appRoot, "src/features/events/validation.ts"), "utf-8");
-
-    expect(source).toContain("events.description");
-    expect(source).toContain("events.endTime");
-    expect(source).toContain("events.matchNotes");
-    expect(source).toContain("getTeamHome");
-    expect(source).toContain("currentRole");
-    expect(source).toContain("setCurrentRole(teamHome.current_membership.role)");
-    expect(source).toContain("canManageEvents");
-    expect(source).toContain('currentRole === "captain" || currentRole === "admin"');
-    expect(source).toContain("!canManageEvents");
-    expect(source).toContain("if (!canManageEvents)");
-    expect(functionBody(source, "handleLoadEvents")).not.toContain("if (!canManageEvents)");
-    expect(source).toContain("filterType");
-    expect(source).toContain("filterStatus");
-    expect(source).toContain("buildEventsQuery");
-    expect(source).toContain("loadEvents");
-    expect(source).toContain("handleSelectFilterType");
-    expect(source).toContain("handleSelectFilterStatus");
-    expect(source).toContain("onPress={() => handleSelectFilterType(type)}");
-    expect(source).toContain("onPress={() => handleSelectFilterStatus(status)}");
-    expect(source).toContain("onPress={() => setEventType(\"training\")}");
-    expect(source).toContain("onPress={() => setEventType(\"match\")}");
-    expect(source).toContain("style={[styles.pillButton, eventType === \"training\" && styles.activePill, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.pillButton, eventType === \"match\" && styles.activePill, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.pillButton, filterType === type && styles.activePill, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.pillButton, filterStatus === status && styles.activePill, isLoading && styles.disabled]}");
-    expect(source).toContain("await loadEvents(filterType, filterStatus);");
-    expect(source).toContain("startsAfter");
-    expect(source).toContain("startsBefore");
-    expect(source).toContain("events.filters");
-    expect(source).toContain("events.captainOnlyHint");
-    expect(source).not.toContain("signup_deadline");
-    expect(source).toContain("end_time");
-    expect(source).toContain("parseIsoDateTime");
-    expect(source).toContain("parseOptionalIsoDateTime");
-    expect(validationSource).toContain("isoDateTimePattern");
-    expect(validationSource).toContain("T\\d{2}:\\d{2}");
-    expect(validationSource).toContain("(?:Z|[+-]\\d{2}:\\d{2})");
-    expect(source).toContain("events.invalidDateTime");
-    expect(source).toContain("events.invalidEventInput");
-    expect(source).toContain("isValidEventSchedule");
-    expect(source).toContain("events.invalidSchedule");
-    expect(source).toContain("events.invalidMatchInput");
-    expect(source).toContain("getDefaultStartTime");
-    expect(source).toContain("createdEvent");
-    expect(source).toContain("setCreatedEvent(createdEvent)");
-    expect(source).toContain("params: { eventId: createdEvent.id }");
-    for (const key of [
-      "events.startTime",
-      "events.endTime",
-      "events.startsAfter",
-      "events.startsBefore"
-    ]) {
-      expect(source).toContain(`<DateTimeField label={t("${key}")}`);
+  test("event creation has a dedicated route shared by both activity lists", () => {
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events/new.tsx"), "utf-8");
+    for (const route of ["app/(app)/(tabs)/events.tsx", "app/(app)/teams/[teamId]/events.tsx"]) {
+      const list = readFileSync(resolve(appRoot, route), "utf-8");
+      expect(list).toContain('pathname: "/teams/[teamId]/events/new"');
+      expect(list).not.toContain("handleCreateEvent");
+      expect(list).not.toContain("setShowCreate");
+      expect(list).not.toContain("events.titleField");
+      expect(list).toContain("useFocusEffect");
     }
-    expect(source.split('placeholder={t("events.opponent")}')[0].slice(-180)).toContain("autoCorrect={false}");
-    expect(functionBody(source, "handleCreateEvent")).toContain('setTitle("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain('setDescription("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain('setLocation("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain("setStartTime(getDefaultStartTime());");
-    expect(functionBody(source, "handleCreateEvent")).toContain('setEndTime("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain('setOpponent("");');
-    expect(functionBody(source, "handleCreateEvent")).toContain('setMatchNotes("");');
-    expect(source).not.toContain('useState("周末训练")');
-    expect(source).not.toContain('useState("主球场")');
-    expect(source).not.toContain('useState("对手球队")');
+    for (const key of ["events.titleField", "events.description", "events.location", "events.startTime", "events.endTime", "events.opponent", "events.matchNotes"]) {
+      expect(source).toContain(`t("${key}")`);
+    }
+    expect(source).toContain("getTeamHome(teamId)");
+    expect(source).toContain('currentRole === "admin"');
+    expect(source).toContain('router.replace({ pathname: "/events/[eventId]"');
+    expect(source).toContain("isValidEventSchedule");
+    expect(source).toContain("pendingSubmission.current.id");
+    const management = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events.tsx"), "utf-8");
+    for (const key of ["events.startsAfter", "events.startsBefore"]) {
+      expect(management).toContain(`<DateTimeField label={t("${key}")}`);
+    }
   });
 
   test("coin screen exposes ledger and keeps negative adjustment input possible", () => {

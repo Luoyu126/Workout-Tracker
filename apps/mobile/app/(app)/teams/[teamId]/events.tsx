@@ -1,50 +1,34 @@
 import { DateTimeField } from "@/components/ui/DateTimeField";
-import { Link, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Link, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
 import {
-  createEvent,
-  createMatch,
   getTeamEvents,
   type EventStatus,
   type EventType,
   type TeamEvent
 } from "@/features/events/api";
-import { isValidEventSchedule, parseIsoDateTime, parseOptionalIsoDateTime } from "@/features/events/validation";
+import { parseOptionalIsoDateTime } from "@/features/events/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
-import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
-
-function getDefaultStartTime() {
-  return new Date(Date.now() + 86_400_000).toISOString();
-}
 
 export default function TeamEventsScreen() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [events, setEvents] = useState<TeamEvent[]>([]);
-  const [eventType, setEventType] = useState<EventType>("training");
   const [filterType, setFilterType] = useState<EventType | null>(null);
   const [filterStatus, setFilterStatus] = useState<EventStatus | null>("published");
   const [startsAfter, setStartsAfter] = useState("");
   const [startsBefore, setStartsBefore] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [startTime, setStartTime] = useState(getDefaultStartTime());
-  const [endTime, setEndTime] = useState("");
-  const [opponent, setOpponent] = useState("");
-  const [matchNotes, setMatchNotes] = useState("");
-  const [createdEvent, setCreatedEvent] = useState<TeamEvent | null>(null);
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const canManageEvents = currentRole === "captain" || currentRole === "admin";
+  const canManageEvents = currentRole === "admin";
 
   function buildEventsQuery(type: EventType | null, status: EventStatus | null) {
     const parsedStartsAfter = parseOptionalIsoDateTime(startsAfter);
@@ -99,75 +83,11 @@ export default function TeamEventsScreen() {
     }
   }
 
-  useEffect(() => {
-    if (teamId) {
-      void handleLoadEvents();
-    }
-  }, [teamId]);
-
-  async function handleCreateEvent() {
-    if (!teamId) {
-      return;
-    }
-    if (!canManageEvents) {
-      setMessage(t("events.captainOnlyHint"));
-      return;
-    }
-    const parsedStartTime = parseIsoDateTime(startTime);
-    const parsedEndTime = parseIsoDateTime(endTime);
-    if (
-      title.trim().length === 0 ||
-      parsedStartTime === null ||
-      parsedEndTime === null
-    ) {
-      setMessage(t("events.invalidEventInput"));
-      return;
-    }
-    if (!isValidEventSchedule(parsedStartTime, parsedEndTime)) {
-      setMessage(t("events.invalidSchedule"));
-      return;
-    }
-    if (eventType === "match" && opponent.trim().length === 0) {
-      setMessage(t("events.invalidMatchInput"));
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const eventInput = {
-        type: eventType,
-        title: title.trim(),
-        description: description.trim().length > 0 ? description.trim() : null,
-        location: location.trim().length > 0 ? location.trim() : null,
-        start_time: parsedStartTime,
-        end_time: parsedEndTime
-      };
-      const createdEvent =
-        eventType === "match"
-          ? await createMatch(teamId, {
-              event: eventInput,
-              match_details: {
-                opponent: opponent.trim(),
-                notes: matchNotes.trim().length > 0 ? matchNotes.trim() : null
-              }
-            })
-          : await createEvent(teamId, eventInput);
-      setCreatedEvent(createdEvent);
-      await loadEvents(filterType, filterStatus);
-      setTitle("");
-      setDescription("");
-      setLocation("");
-      setStartTime(getDefaultStartTime());
-      setEndTime("");
-      setOpponent("");
-      setMatchNotes("");
-      setMessage(t("events.created"));
-    } catch (error) {
-      setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  const loadOnFocus = useRef(handleLoadEvents);
+  loadOnFocus.current = handleLoadEvents;
+  useFocusEffect(useCallback(() => {
+    void loadOnFocus.current();
+  }, [teamId]));
 
   async function handleSelectFilterType(type: EventType | null) {
     setFilterType(type);
@@ -221,80 +141,11 @@ export default function TeamEventsScreen() {
         </View>
       ) : null}
       {canManageEvents ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t("events.create")}</Text>
-          <Text style={styles.muted}>{t("events.captainOnlyHint")}</Text>
-        <View style={styles.actions}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={isLoading}
-            onPress={() => setEventType("training")}
-            style={[styles.pillButton, eventType === "training" && styles.activePill, isLoading && styles.disabled]}
-          >
-            <Text style={styles.secondaryText}>{t("events.training")}</Text>
+        <Link href={{ pathname: "/teams/[teamId]/events/new", params: { teamId } }} asChild>
+          <Pressable accessibilityRole="button" style={styles.button}>
+            <Text style={styles.buttonText}>{t("events.create")}</Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={isLoading}
-            onPress={() => setEventType("match")}
-            style={[styles.pillButton, eventType === "match" && styles.activePill, isLoading && styles.disabled]}
-          >
-            <Text style={styles.secondaryText}>{t("events.match")}</Text>
-          </Pressable>
-        </View>
-        <TextInput
-          onChangeText={setTitle}
-          placeholder={t("events.titleField")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={title}
-        />
-        <TextInput
-          multiline
-          onChangeText={setDescription}
-          placeholder={t("events.description")}
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.multilineInput]}
-          value={description}
-        />
-        <TextInput
-          onChangeText={setLocation}
-          placeholder={t("events.location")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={location}
-        />
-        <DateTimeField label={t("events.startTime")} value={startTime} onChange={setStartTime} disabled={isLoading} />
-        <DateTimeField label={t("events.endTime")} value={endTime} onChange={setEndTime} disabled={isLoading} />
-        {eventType === "match" ? (
-          <>
-            <TextInput
-              autoCorrect={false}
-              onChangeText={setOpponent}
-              placeholder={t("events.opponent")}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={opponent}
-            />
-            <TextInput
-              multiline
-              onChangeText={setMatchNotes}
-              placeholder={t("events.matchNotes")}
-              placeholderTextColor={colors.muted}
-              style={[styles.input, styles.multilineInput]}
-              value={matchNotes}
-            />
-          </>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          disabled={isLoading}
-          onPress={handleCreateEvent}
-          style={[styles.button, isLoading && styles.disabled]}
-        >
-          <Text style={styles.buttonText}>{t("events.create")}</Text>
-        </Pressable>
-        </View>
+        </Link>
       ) : null}
       <Pressable
         accessibilityRole="button"
@@ -315,13 +166,6 @@ export default function TeamEventsScreen() {
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />
-      {createdEvent ? (
-        <Link href={{ pathname: "/events/[eventId]", params: { eventId: createdEvent.id } }} asChild>
-          <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-            <Text style={styles.secondaryText}>{t("events.detail")}</Text>
-          </Pressable>
-        </Link>
-      ) : null}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("events.filters")}</Text>
         <View style={styles.actions}>

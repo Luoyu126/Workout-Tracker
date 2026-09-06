@@ -1,50 +1,31 @@
-import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
-import { Badge, Button, Card, EmptyState, Screen, SegmentedControl, TextField } from "@/components/ui";
+import { Badge, Card, EmptyState, Screen, SegmentedControl } from "@/components/ui";
 import {
-  createEvent,
-  createMatch,
   getTeamEvents,
   type EventStatus,
   type EventType,
   type TeamEvent
 } from "@/features/events/api";
-import { isValidEventSchedule, parseIsoDateTime } from "@/features/events/validation";
-import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
-function getDefaultStartTime() {
-  return new Date(Date.now() + 86_400_000).toISOString();
-}
-
 export default function EventsTabScreen() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const router = useRouter();
   const { selectedTeamId, role, home, loadState: teamLoadState, refresh: refreshTeam } = useTeamContext();
-  const canManageEvents = role === "captain" || role === "admin";
+  const canManageEvents = role === "admin";
   const [events, setEvents] = useState<TeamEvent[]>([]);
   const [filterType, setFilterType] = useState<EventType | null>(null);
   const [filterStatus, setFilterStatus] = useState<EventStatus | null>("published");
-  const [showCreate, setShowCreate] = useState(false);
-  const [eventType, setEventType] = useState<EventType>("training");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [startTime, setStartTime] = useState(getDefaultStartTime());
-  const [endTime, setEndTime] = useState("");
-  const [opponent, setOpponent] = useState("");
-  const [matchNotes, setMatchNotes] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadEvents = useCallback(async () => {
@@ -53,7 +34,6 @@ export default function EventsTabScreen() {
       return;
     }
     setIsLoading(true);
-    setMessage(null);
     setLoadState({ status: "loading" });
     try {
       const nextEvents = await getTeamEvents(selectedTeamId, {
@@ -69,71 +49,10 @@ export default function EventsTabScreen() {
     }
   }, [selectedTeamId, filterType, filterStatus, canManageEvents, t]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void loadEvents();
-  }, [loadEvents]);
+  }, [loadEvents]));
 
-  async function handleCreateEvent() {
-    if (!selectedTeamId || !canManageEvents) {
-      setMessage(t("events.captainOnlyHint"));
-      return;
-    }
-    const parsedStartTime = parseIsoDateTime(startTime);
-    const parsedEndTime = parseIsoDateTime(endTime);
-    if (
-      title.trim().length === 0 ||
-      parsedStartTime === null ||
-      parsedEndTime === null
-    ) {
-      setMessage(t("events.invalidEventInput"));
-      return;
-    }
-    if (!isValidEventSchedule(parsedStartTime, parsedEndTime)) {
-      setMessage(t("events.invalidSchedule"));
-      return;
-    }
-    if (eventType === "match" && opponent.trim().length === 0) {
-      setMessage(t("events.invalidMatchInput"));
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const eventInput = {
-        type: eventType,
-        title: title.trim(),
-        description: description.trim().length > 0 ? description.trim() : null,
-        location: location.trim().length > 0 ? location.trim() : null,
-        start_time: parsedStartTime,
-        end_time: parsedEndTime
-      };
-      const created =
-        eventType === "match"
-          ? await createMatch(selectedTeamId, {
-              event: eventInput,
-              match_details: {
-                opponent: opponent.trim(),
-                notes: matchNotes.trim().length > 0 ? matchNotes.trim() : null
-              }
-            })
-          : await createEvent(selectedTeamId, eventInput);
-      setTitle("");
-      setDescription("");
-      setLocation("");
-      setStartTime(getDefaultStartTime());
-      setEndTime("");
-      setOpponent("");
-      setMatchNotes("");
-      setShowCreate(false);
-      setMessage(t("events.created"));
-      await loadEvents();
-      router.push({ pathname: "/events/[eventId]", params: { eventId: created.id } });
-    } catch (error) {
-      setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   return (
     <Screen
@@ -142,8 +61,8 @@ export default function EventsTabScreen() {
       refreshing={isLoading}
       onRefresh={() => void loadEvents()}
       headerRight={
-        canManageEvents ? (
-          <Pressable accessibilityRole="button" onPress={() => setShowCreate((value) => !value)} style={styles.createBtn}>
+        canManageEvents && selectedTeamId ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/teams/[teamId]/events/new", params: { teamId: selectedTeamId } })} style={styles.createBtn}>
             <Ionicons color={colors.accentText} name="add" size={20} />
             <Text style={styles.createBtnText}>{t("events.create")}</Text>
           </Pressable>
@@ -179,39 +98,12 @@ export default function EventsTabScreen() {
         />
       ) : null}
 
-      {showCreate && canManageEvents ? (
-        <Card>
-          <Text style={styles.cardTitle}>{t("events.create")}</Text>
-          <SegmentedControl
-            value={eventType}
-            onChange={setEventType}
-            options={[
-              { value: "training", label: t("events.training") },
-              { value: "match", label: t("events.match") }
-            ]}
-          />
-          <TextField label={t("events.titleField")} onChangeText={setTitle} value={title} />
-          <TextField label={t("events.location")} onChangeText={setLocation} value={location} />
-          <TextField label={t("events.description")} multiline onChangeText={setDescription} value={description} />
-          <DateTimeField label={t("events.startTime")} value={startTime} onChange={setStartTime} disabled={isLoading} />
-          <DateTimeField label={t("events.endTime")} value={endTime} onChange={setEndTime} disabled={isLoading} />
-          {eventType === "match" ? (
-            <>
-              <TextField autoCorrect={false} label={t("events.opponent")} onChangeText={setOpponent} value={opponent} />
-              <TextField label={t("events.matchNotes")} multiline onChangeText={setMatchNotes} value={matchNotes} />
-            </>
-          ) : null}
-          <Button disabled={isLoading} label={t("events.create")} onPress={() => void handleCreateEvent()} />
-        </Card>
-      ) : null}
-
       <ScreenState
         loadState={teamLoadState.status === "success" ? loadState : teamLoadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
         emptyMessage={events.length === 0 ? t("events.noEvents") : null}
-        message={message}
         onRetry={teamLoadState.status === "error" ? () => void refreshTeam() : () => void loadEvents()}
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
