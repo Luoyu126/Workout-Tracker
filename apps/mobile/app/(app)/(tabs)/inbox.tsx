@@ -13,6 +13,7 @@ import {
   type Notification
 } from "@/features/notifications/api";
 import { getMyTeams, type Team } from "@/features/teams/api";
+import { InboxJoinRequests } from "@/features/teams/InboxJoinRequests";
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -81,6 +82,7 @@ export default function InboxTabScreen() {
   const [announcementBody, setAnnouncementBody] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
+  const [requestsRefreshVersion, setRequestsRefreshVersion] = useState(0);
   const canSendAnnouncement = role === "admin";
 
   async function loadEventSignups(nextNotifications: Notification[]) {
@@ -256,7 +258,10 @@ export default function InboxTabScreen() {
     <Screen
       title={`${t("inbox.title")}${!canSendAnnouncement && unreadCount ? ` (${unreadCount})` : ""}`}
       refreshing={isLoading}
-      onRefresh={() => void handleLoadNotifications()}
+      onRefresh={() => {
+        setRequestsRefreshVersion((current) => current + 1);
+        void handleLoadNotifications();
+      }}
       headerRight={
         !canSendAnnouncement ? (
           <Pressable accessibilityRole="button" onPress={() => void handleMarkAllRead()}>
@@ -353,6 +358,9 @@ export default function InboxTabScreen() {
         </Card>
       ) : null}
 
+      {canSendAnnouncement && scopedTeamId ? (
+        <InboxJoinRequests key={scopedTeamId} teamId={scopedTeamId} refreshVersion={requestsRefreshVersion} />
+      ) : null}
     </Screen>
   );
 }

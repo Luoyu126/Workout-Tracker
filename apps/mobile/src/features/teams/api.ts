@@ -41,6 +41,7 @@ export type Membership = {
   player_name: string | null;
   status: "active" | "inactive" | "pending";
   joined_at: string;
+  request_submitted_at: string | null;
   left_at: string | null;
   created_at: string;
   updated_at: string;
@@ -152,6 +153,10 @@ export function requestToJoinTeam(teamId: string) {
   return apiRequest<Membership>(`/api/v1/teams/${teamId}/join-requests`, {
     method: "POST"
   });
+}
+
+export function getJoinRequests(teamId: string) {
+  return apiRequest<Membership[]>(`/api/v1/teams/${teamId}/join-requests`);
 }
 
 export function getMyOrganizations() {

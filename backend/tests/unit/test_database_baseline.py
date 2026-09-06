@@ -58,6 +58,7 @@ EXPECTED_TABLE_COLUMNS = {
         "player_name",
         "status",
         "joined_at",
+        "request_submitted_at",
         "left_at",
         "created_at",
         "updated_at",

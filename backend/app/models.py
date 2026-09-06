@@ -115,6 +115,7 @@ class TeamMembership(Base, TimestampMixin):
         String(32), nullable=False, default=MembershipStatus.pending
     )
     joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    request_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     team: Mapped[Team] = relationship(back_populates="memberships")

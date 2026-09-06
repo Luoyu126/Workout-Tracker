@@ -74,6 +74,7 @@ class MembershipRead(BaseModel):
     player_name: str | None
     status: MembershipStatus
     joined_at: datetime | None
+    request_submitted_at: datetime | None
     left_at: datetime | None
     created_at: datetime
     updated_at: datetime

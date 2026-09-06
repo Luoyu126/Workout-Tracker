@@ -163,12 +163,18 @@ def request_to_join_team(
             membership.status = MembershipStatus.pending
             membership.joined_at = None
             membership.left_at = None
+        membership.request_submitted_at = datetime.now(UTC)
         repository.flush(session)
 
     loaded_membership = repository.get_membership_with_user(session, team_id, user.id)
     if loaded_membership is None:
         raise MembershipNotFoundError()
     return loaded_membership
+
+
+def list_join_requests(session: Session, team_id: UUID, user: User) -> list[TeamMembership]:
+    require_team_role(session, team_id, user.id, MembershipRole.admin)
+    return repository.list_join_requests(session, team_id)
 
 
 def get_team_for_member(session: Session, team_id: UUID, user: User) -> Team:

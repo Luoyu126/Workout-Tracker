@@ -11,7 +11,9 @@ from sqlalchemy.pool import StaticPool
 from app.common.database import Base
 from app.common.enums import MembershipRole, MembershipStatus, TeamStatus
 from app.models import Organization, Team, TeamMembership, User
-from app.teams.router import post_join_request, read_team, read_team_search
+from app.teams.router import post_join_request, read_join_requests, read_team, read_team_search
+from app.teams.schemas import MembershipRead, MembershipUpdateRequest
+from app.teams.service import update_member
 
 
 @pytest.fixture()
@@ -124,6 +126,9 @@ def test_join_request_creates_one_pending_membership_and_blocks_private_access(
     assert membership.status == MembershipStatus.pending
     assert membership.joined_at is None
     assert membership.left_at is None
+    assert membership.request_submitted_at is not None
+    submitted_at = membership.request_submitted_at
+    assert MembershipRead.model_validate(membership).request_submitted_at == submitted_at
     assert session.scalar(
         select(func.count()).select_from(TeamMembership).where(
             TeamMembership.team_id == team.id,
@@ -140,6 +145,9 @@ def test_join_request_creates_one_pending_membership_and_blocks_private_access(
         post_join_request(team.id, user, session)
     assert repeated_exc.value.status_code == 409
     assert repeated_exc.value.detail["code"] == "JOIN_REQUEST_PENDING"
+    session.refresh(membership)
+    assert membership.request_submitted_at is not None
+    assert membership.request_submitted_at.replace(tzinfo=UTC) == submitted_at.replace(tzinfo=UTC)
     assert session.scalar(
         select(func.count()).select_from(TeamMembership).where(
             TeamMembership.team_id == team.id,
@@ -183,6 +191,7 @@ def test_inactive_membership_is_reused_and_active_or_archived_teams_are_rejected
     assert reapplied.status == MembershipStatus.pending
     assert reapplied.joined_at is None
     assert reapplied.left_at is None
+    assert reapplied.request_submitted_at is not None
 
     reapplied.status = MembershipStatus.active
     session.commit()
@@ -200,3 +209,46 @@ def test_inactive_membership_is_reused_and_active_or_archived_teams_are_rejected
         post_join_request(uuid4(), user, session)
     assert missing_exc.value.status_code == 404
     assert missing_exc.value.detail["code"] == "TEAM_RESOURCE_NOT_FOUND"
+
+
+def test_pending_inbox_uses_latest_submission_and_enforces_team_admin(session: Session) -> None:
+    admin, first, second, outsider = [_user(name) for name in ["Admin", "First", "Second", "Outsider"]]
+    organization = Organization(name="Inbox Org", slug=f"inbox-{uuid4().hex[:8]}")
+    session.add_all([admin, first, second, outsider, organization])
+    session.flush()
+    team = Team(organization_id=organization.id, name="Inbox Team")
+    other_team = Team(organization_id=organization.id, name="Other Team")
+    session.add_all([team, other_team])
+    session.flush()
+    session.add(TeamMembership(team_id=team.id, user_id=admin.id,
+                               role=MembershipRole.admin, status=MembershipStatus.active))
+    session.commit()
+    first_request = post_join_request(team.id, first, session)
+    second_request = post_join_request(team.id, second, session)
+    post_join_request(other_team.id, outsider, session)
+    old = datetime.now(UTC) - timedelta(days=2)
+    first_request.request_submitted_at = old
+    second_request.request_submitted_at = old + timedelta(days=1)
+    session.commit()
+    assert [row.user_id for row in read_join_requests(team.id, admin, session)] == [first.id, second.id]
+    original_id = first_request.id
+    original_time = first_request.request_submitted_at
+    update_member(session, team.id, first.id, admin, MembershipUpdateRequest(player_name="Edited"))
+    assert first_request.request_submitted_at.replace(tzinfo=UTC) == original_time.replace(tzinfo=UTC)
+    update_member(session, team.id, first.id, admin, MembershipUpdateRequest(status=MembershipStatus.inactive))
+    assert [row.user_id for row in read_join_requests(team.id, admin, session)] == [second.id]
+    reapplied = post_join_request(team.id, first, session)
+    assert reapplied.id == original_id
+    assert reapplied.request_submitted_at is not None
+    assert reapplied.request_submitted_at.replace(tzinfo=UTC) > old + timedelta(days=1)
+    assert [row.user_id for row in read_join_requests(team.id, admin, session)] == [second.id, first.id]
+    update_member(session, team.id, second.id, admin, MembershipUpdateRequest(status=MembershipStatus.active))
+    assert [row.user_id for row in read_join_requests(team.id, admin, session)] == [first.id]
+    for target_team, user in [(team, first), (team, second), (team, outsider), (other_team, admin)]:
+        with pytest.raises(HTTPException) as denied:
+            read_join_requests(target_team.id, user, session)
+        assert denied.value.status_code == 403
+    # Historical unknown times remain null; the deterministic fallback is creation time.
+    first_request.request_submitted_at = None
+    session.commit()
+    assert read_join_requests(team.id, admin, session)[0].request_submitted_at is None

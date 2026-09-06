@@ -191,6 +191,7 @@ TeamMembership
 ├── player_name         string, nullable
 ├── status              enum
 ├── joined_at           timestamp, nullable
+├── request_submitted_at timestamp, nullable
 ├── left_at             timestamp, nullable
 ├── created_at          timestamp
 └── updated_at          timestamp
@@ -239,6 +240,7 @@ active ─────停用────> inactive
 
 * 用户申请入队时创建 `role=member`、`status=pending` 的记录。
 * 重新申请会复用已有 `inactive` 记录，将角色重置为 `member`，并将状态改为 `pending`。
+* `request_submitted_at` 由后端在实际提交或重新提交入队申请时写入当前 UTC 时间；重复 pending 申请失败时不改变它，审批和资料修改也不改变它。直接添加的成员及迁移前无法还原提交时间的历史记录允许为空。待审核列表按 `COALESCE(request_submitted_at, created_at)` 升序、再按 id 升序排序；历史空值不得冒充精确提交时间。
 * `pending` 和 `inactive` 成员不能访问球队私有数据、报名活动、获得报名奖励、兑换商品或执行球队管理操作。
 * 批准申请会将 `pending` 改为 `active`；`joined_at` 设置为当前批准时间，并清空 `left_at`。
 * 拒绝申请会将 `pending` 改为 `inactive`。停用一个 `active` 成员时设置 `left_at`。

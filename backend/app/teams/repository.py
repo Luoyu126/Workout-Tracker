@@ -104,6 +104,22 @@ def list_memberships(
     return list(session.scalars(stmt))
 
 
+def list_join_requests(session: Session, team_id: UUID) -> list[TeamMembership]:
+    return list(session.scalars(
+        select(TeamMembership)
+        .options(selectinload(TeamMembership.user))
+        .where(
+            TeamMembership.team_id == team_id,
+            TeamMembership.role == MembershipRole.member,
+            TeamMembership.status == MembershipStatus.pending,
+        )
+        .order_by(
+            func.coalesce(TeamMembership.request_submitted_at, TeamMembership.created_at),
+            TeamMembership.id,
+        )
+    ))
+
+
 def list_member_memberships(session: Session, team_id: UUID) -> list[TeamMembership]:
     return list(
         session.scalars(

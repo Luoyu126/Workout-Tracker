@@ -1546,6 +1546,18 @@
             ],
             "title": "Player Name"
           },
+          "request_submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Submitted At"
+          },
           "role": {
             "$ref": "#/components/schemas/MembershipRole"
           },
@@ -1587,6 +1599,7 @@
           "player_name",
           "status",
           "joined_at",
+          "request_submitted_at",
           "left_at",
           "created_at",
           "updated_at"
@@ -5070,6 +5083,56 @@
       }
     },
     "/api/v1/teams/{team_id}/join-requests": {
+      "get": {
+        "operationId": "read_join_requests_api_v1_teams__team_id__join_requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Team Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MembershipRead"
+                  },
+                  "title": "Response Read Join Requests Api V1 Teams  Team Id  Join Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Join Requests",
+        "tags": [
+          "teams"
+        ]
+      },
       "post": {
         "operationId": "post_join_request_api_v1_teams__team_id__join_requests_post",
         "parameters": [

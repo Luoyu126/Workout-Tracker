@@ -47,6 +47,7 @@ describe("feature API contracts", () => {
       getMyOrganizations,
       getMyTeams,
       requestToJoinTeam,
+      getJoinRequests,
       searchTeams,
       getTeamHome,
       getTeamMember,
@@ -84,6 +85,8 @@ describe("feature API contracts", () => {
     });
     searchTeams(" Falcons ", 15);
     requestToJoinTeam("team-2");
+    getJoinRequests("team-2");
+    expect(apiRequestMock).toHaveBeenLastCalledWith("/api/v1/teams/team-2/join-requests");
 
     expect(apiRequestMock).toHaveBeenNthCalledWith(1, "/api/v1/organizations");
     expect(apiRequestMock).toHaveBeenNthCalledWith(2, "/api/v1/teams");

@@ -502,6 +502,17 @@ export const apiEndpoints = [
     ]
   },
   {
+    "operationId": "read_join_requests_api_v1_teams__team_id__join_requests_get",
+    "method": "GET",
+    "path": "/api/v1/teams/{team_id}/join-requests",
+    "requestBody": null,
+    "response": "MembershipRead[]",
+    "statusCodes": [
+      200,
+      422
+    ]
+  },
+  {
     "operationId": "post_join_request_api_v1_teams__team_id__join_requests_post",
     "method": "POST",
     "path": "/api/v1/teams/{team_id}/join-requests",

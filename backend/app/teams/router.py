@@ -24,6 +24,7 @@ from app.teams.service import (
     build_team_home,
     get_member,
     get_team_for_member,
+    list_join_requests,
     list_member_candidates,
     list_members,
     list_my_teams,
@@ -63,6 +64,15 @@ def post_join_request(
     session: Session = Depends(get_db),
 ) -> TeamMembership:
     return request_to_join_team(session, team_id, user)
+
+
+@router.get("/teams/{team_id}/join-requests", response_model=list[MembershipRead])
+def read_join_requests(
+    team_id: UUID,
+    user: User = Depends(current_user),
+    session: Session = Depends(get_db),
+) -> list[TeamMembership]:
+    return list_join_requests(session, team_id, user)
 
 
 @router.get("/teams/{team_id}/home", response_model=TeamHomeRead)

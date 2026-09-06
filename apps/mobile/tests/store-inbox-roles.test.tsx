@@ -29,6 +29,7 @@ vi.mock("@/components/ui", () => ({
   Badge: "badge", Button: "button", Card: "card", EmptyState: "empty", Screen: "screen",
   SegmentedControl: "segments", TextField: "field"
 }));
+vi.mock("@/features/teams/InboxJoinRequests", () => ({ InboxJoinRequests: "join-requests" }));
 vi.mock("@/components/ScreenState", () => ({ ScreenState: "state" }));
 vi.mock("@/components/LanguageToggle", () => ({ LanguageToggle: "language" }));
 vi.mock("@/providers/AuthProvider", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
@@ -72,6 +73,7 @@ function text(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(text).join(" ");
   if (!isValidElement<Props>(node)) return "";
+  if (node.type === "join-requests") return "inbox.joinRequests";
   return [node.props.label, node.props.title, ...node.props.options?.map((option) => option.label) ?? [],
     text(node.props.children), text(node.props.headerRight)].join(" ");
 }
@@ -109,9 +111,10 @@ test.each([Store, TeamStore, Detail])("member keeps redemption UI in %s", async 
   expect(ui).toContain("store.redeem"); expect(ui).not.toContain("store.manageRedemptions");
   if (screen !== Detail) { expect(ui).toContain("store.myRedemptions"); expect(h.mine).toHaveBeenCalledOnce(); }
 });
-test("admin inbox contains only announcement controls", async () => {
+test("admin inbox places join requests below announcement controls", async () => {
   const ui = await render(Inbox);
   expect(ui).toContain("inbox.sendAnnouncement");
+  expect(ui.indexOf("inbox.joinRequests")).toBeGreaterThan(ui.indexOf("inbox.sendAnnouncement"));
   for (const key of ["inbox.allFilter", "inbox.unreadOnly", "inbox.markAllRead", "inbox.noNotifications", "profile.notificationSettings"]) {
     expect(ui).not.toContain(key);
   }
@@ -133,5 +136,6 @@ test("member inbox retains filters without device settings", async () => {
   const ui = await render(Inbox);
   expect(ui).toContain("inbox.allFilter"); expect(ui).toContain("inbox.unreadOnly");
   expect(ui).not.toContain("profile.notificationSettings"); expect(ui).not.toContain("inbox.sendAnnouncement");
+  expect(ui).not.toContain("inbox.joinRequests");
   expect(h.notifications).toHaveBeenCalledOnce(); expect(h.unread).toHaveBeenCalledOnce();
 });

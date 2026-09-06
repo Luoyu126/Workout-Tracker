@@ -119,6 +119,27 @@ test("member retains coin balance and personal signup", async () => {
   expect(text(ui)).toContain("home.confirmedGoing");
   expect(h.signup).toHaveBeenCalledWith("event");
 });
+test("member attendance and coin balance occupy equal columns in the same row", () => {
+  h.role = "member";
+  const metrics = nodes(render()).find((node) => node.style?.flexDirection === "row"
+    && text(node.children).includes("home.attendance")
+    && text(node.children).includes("home.coins"));
+  expect(metrics).toBeDefined();
+  const cards = Array.isArray(metrics?.children)
+    ? metrics.children.filter(isValidElement<Props>) : [];
+  expect(cards).toHaveLength(2);
+  expect(cards.map((card) => card.props.style?.flex)).toEqual([1, 1]);
+  expect(text(cards[0])).toContain("75%");
+  expect(text(cards[1])).toContain("100");
+});
+test("switching between admin and member restores coins only for the member", () => {
+  expect(text(render())).not.toContain("home.coins");
+  h.role = "member";
+  expect(text(render())).toContain("home.coins");
+  h.role = "admin";
+  expect(text(render())).not.toContain("home.coins");
+});
+
 test("home confirmation feedback disappears after three seconds", async () => {
   h.role = "member";
   h.signup.mockResolvedValue({ status: "maybe" });

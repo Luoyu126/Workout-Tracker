@@ -164,6 +164,7 @@ jersey_number
 player_name
 status              # active | inactive | pending
 joined_at           # nullable
+request_submitted_at # nullable，最近一次实际提交申请的 UTC 时间；历史未知或直接添加为 null
 left_at
 created_at
 updated_at
@@ -475,6 +476,12 @@ POST /api/v1/teams/{team_id}/join-requests
 - 球队不存在或已经归档时返回 404 `TEAM_RESOURCE_NOT_FOUND`。
 
 成功时返回 `MembershipRead`。申请写入在单一事务中锁定球队和现有成员关系，并继续依赖 `(team_id, user_id)` 唯一约束防止并发重复记录。`pending` 不代表已加入球队，不能访问球队私有内容或执行球队业务操作。
+
+每次成功提交写入后端 UTC `request_submitted_at`，包括复用 inactive 记录重新申请。重复申请失败、审批和资料修改不改变该字段，客户端不能写入它。
+
+GET /api/v1/teams/{team_id}/join-requests
+
+仅当前球队 active admin 可用，否则返回 403 `TEAM_PERMISSION_DENIED`。返回 `MembershipRead[]`，仅包含当前球队 role=member、status=pending 的成员关系。按 `COALESCE(request_submitted_at, created_at)` 从早到晚、再按 id 升序排列。历史未知提交时间为 null，移动端显示未知。管理员收件箱在公告表单下展示该列表，审批复用更新成员接口，成功后移除申请；不生成 Notification 或已读状态。
 
 ### 7.5 创建球队（后续能力）
 
