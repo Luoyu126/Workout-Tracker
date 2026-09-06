@@ -1,4 +1,4 @@
-import { Link, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -199,18 +199,6 @@ export default function TeamHomeScreen() {
               <Text style={styles.metricValue}>{home.member_count}</Text>
               <Text style={styles.muted}>{t("teamHome.members")}</Text>
             </View>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{home.coin_summary.balance}</Text>
-              <Text style={styles.muted}>{t("teamHome.myCoins")}</Text>
-            </View>
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t("teamHome.attendanceSummary")}</Text>
-            <Text style={styles.muted}>
-              {t("signupBoard.going")} {home.signup_summary.going} · {t("signupBoard.maybe")}{" "}
-              {home.signup_summary.maybe} · {t("signupBoard.notGoing")}{" "}
-              {home.signup_summary.not_going}
-            </Text>
           </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t("teamHome.admins")}</Text>
@@ -223,60 +211,6 @@ export default function TeamHomeScreen() {
                 </Text>
               ))
             )}
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t("teamHome.upcomingEvents")}</Text>
-            {isEmptyLoad(loadState, home.upcoming_events.length) ? (
-              <Text style={styles.muted}>{t("events.noEvents")}</Text>
-            ) : (
-              home.upcoming_events.map((event) => (
-                <View key={event.id} style={styles.eventRow}>
-                  <Text style={styles.eventTitle}>{event.title}</Text>
-                  <Text style={styles.muted}>
-                    {t(`events.${event.type}`)} · {new Date(event.start_time).toLocaleString()}
-                  </Text>
-                  <Link href={{ pathname: "/events/[eventId]", params: { eventId: event.id } }} asChild>
-                    <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                      <Text style={styles.secondaryText}>{t("events.detail")}</Text>
-                    </Pressable>
-                  </Link>
-                </View>
-              ))
-            )}
-          </View>
-          <View style={styles.actions}>
-            <Link href={{ pathname: "/teams/[teamId]/members", params: { teamId } }} asChild>
-              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>{t("teams.members")}</Text>
-              </Pressable>
-            </Link>
-            <Link href={{ pathname: "/teams/[teamId]/events", params: { teamId } }} asChild>
-              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>{t("teams.events")}</Text>
-              </Pressable>
-            </Link>
-          </View>
-          <Link href={{ pathname: "/teams/[teamId]/signup-board", params: { teamId } }} asChild>
-            <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryText}>{t("signupBoard.title")}</Text>
-            </Pressable>
-          </Link>
-          <Link href={{ pathname: "/inbox", params: { teamId } }} asChild>
-            <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryText}>{t("teams.inbox")}</Text>
-            </Pressable>
-          </Link>
-          <View style={styles.actions}>
-            <Link href={{ pathname: "/teams/[teamId]/store", params: { teamId } }} asChild>
-              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>{t("teams.store")}</Text>
-              </Pressable>
-            </Link>
-            <Link href={{ pathname: "/teams/[teamId]/coins", params: { teamId } }} asChild>
-              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                <Text style={styles.secondaryText}>{t("teams.coins")}</Text>
-              </Pressable>
-            </Link>
           </View>
         </>
       ) : null}
@@ -356,17 +290,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 30,
     fontWeight: "900"
-  },
-  eventRow: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    gap: 6,
-    padding: 12
-  },
-  eventTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "800"
   },
   input: {
     backgroundColor: colors.background,

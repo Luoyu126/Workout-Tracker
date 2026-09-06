@@ -223,13 +223,33 @@ describe("mobile MVP smoke", () => {
     expect(homeSource).toContain("refresh");
   });
 
-  test("teams screen displays accessible organizations alongside teams", () => {
+  test("team home is reached through my teams and keeps only team information and management", () => {
+    const profile = readFileSync(resolve(appRoot, "app/(app)/(tabs)/profile.tsx"), "utf-8");
+    const teams = readFileSync(resolve(appRoot, "app/(app)/teams.tsx"), "utf-8");
+    const home = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/index.tsx"), "utf-8");
+    expect(profile).not.toContain('title={t("teams.home")}');
+    expect(profile).toContain('title={t("home.openTeams")}');
+    expect(profile).toContain('onPress={() => router.push("/teams")}');
+    expect(teams).toContain('pathname: "/teams/[teamId]"');
+    expect(teams).toContain('t("teams.home")');
+    for (const key of ["teamHome.myCoins", "teamHome.attendanceSummary", "teamHome.upcomingEvents"]) {
+      expect(home).not.toContain(key);
+    }
+    expect(home).not.toContain("<Link");
+    for (const key of ["teamHome.members", "teamHome.admins", "teamHome.manageTeam", "teamHome.saveTeam"]) {
+      expect(home).toContain(key);
+    }
+    expect(home).toContain("await getTeamHome(teamId)");
+    expect(home).toContain("await updateTeam(teamId,");
+  });
+
+  test("teams screen hides organizations while retaining team filters and navigation", () => {
     const source = readFileSync(resolve(appRoot, "app/(app)/teams.tsx"), "utf-8");
 
-    expect(source).toContain("getMyOrganizations");
-    expect(source).toContain("organizations");
-    expect(source).toContain("teams.organizations");
-    expect(source).toContain("teams.noOrganizations");
+    expect(source).not.toContain("getMyOrganizations");
+    expect(source).not.toContain("teams.organizations");
+    expect(source).not.toContain("teams.noOrganizations");
+    expect(source).toContain("setTeams(await teamsRequest)");
     expect(source).toContain("teamStatusFilter");
     expect(source).toContain("handleSelectTeamStatus");
     expect(source).toContain("teams.allStatuses");
@@ -469,9 +489,9 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("logo_url: normalizeOptionalTeamText(teamLogoUrl)");
     expect(source).toContain("<Image");
     expect(source).toContain("teamHome.invalidName");
-    expect(source).toContain('pathname: "/inbox"');
-    expect(source).toContain("teams.inbox");
-    expect(source).toContain("events.${event.type}");
+    expect(source).not.toContain('pathname: "/inbox"');
+    expect(source).not.toContain("teams.inbox");
+    expect(source).not.toContain("events.${event.type}");
   });
 
   test("event detail exposes current signup and not-going note input", () => {
@@ -924,7 +944,7 @@ describe("mobile MVP smoke", () => {
       expect(readFileSync(resolve(appRoot, layout), "utf-8")).toContain('headerBackButtonDisplayMode: "minimal"');
     }
     expect(teamsSource).toContain("/teams/[teamId]/signup-board");
-    expect(teamHomeSource).toContain("/teams/[teamId]/signup-board");
+    expect(teamHomeSource).not.toContain("/teams/[teamId]/signup-board");
   });
 
   test("event detail route can complete published events with signup rewards", () => {

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { CompactLanguageToggle } from "@/components/LanguageToggle";
@@ -36,6 +36,22 @@ export default function HomeScreen() {
   const [isSignupMessageSuccess, setIsSignupMessageSuccess] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [nextSignupStatus, setNextSignupStatus] = useState<SignupStatus | null>(null);
+  const canParticipate = home?.current_membership.role === "member";
+  const hasFocused = useRef(false);
+  const refreshRef = useRef(refresh);
+
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  useFocusEffect(useCallback(() => {
+    // TeamProvider performs the initial load; refresh when returning from another screen.
+    if (!hasFocused.current) {
+      hasFocused.current = true;
+      return;
+    }
+    void refreshRef.current();
+  }, []));
 
   const attendanceRate = useMemo(() => {
     if (!home || home.signup_summary.total === 0) {
@@ -52,7 +68,7 @@ export default function HomeScreen() {
       let cancelled = false;
 
       async function loadNextSignup() {
-        if (!nextEvent?.id) {
+        if (!nextEvent?.id || !canParticipate) {
           setNextSignupStatus(null);
           return;
         }
@@ -72,11 +88,11 @@ export default function HomeScreen() {
       return () => {
         cancelled = true;
       };
-    }, [nextEvent?.id, home])
+    }, [nextEvent?.id, home, canParticipate])
   );
 
   async function handleQuickGoing() {
-    if (!nextEvent) {
+    if (!nextEvent || !canParticipate) {
       return;
     }
     setIsSigningUp(true);
@@ -145,12 +161,12 @@ export default function HomeScreen() {
             <Text style={[styles.metricValue, { color: colors.accentSoft }]}>{attendanceRate}</Text>
           </Card>
         </Pressable>
-        <Card style={styles.metricCard}>
+        {canParticipate ? <Card style={styles.metricCard}>
           <Text style={styles.metricLabel}>{t("home.coins")}</Text>
           <Text style={[styles.metricValue, { color: colors.gold }]}>
             {(home?.coin_summary.balance ?? "--").toLocaleString?.() ?? home?.coin_summary.balance ?? "--"}
           </Text>
-        </Card>
+        </Card> : null}
       </View>
 
       <Text style={styles.sectionLabel}>{t("home.nextEvent")}</Text>
@@ -169,7 +185,7 @@ export default function HomeScreen() {
             {nextEvent.location ?? t("events.location")}
           </Text>
           <View style={styles.eventActions}>
-            {nextSignupStatus === "going" ? (
+            {canParticipate && (nextSignupStatus === "going" ? (
               <Button
                 label={t("home.confirmedGoing")}
                 variant="secondary"
@@ -190,7 +206,7 @@ export default function HomeScreen() {
                 onPress={() => void handleQuickGoing()}
                 style={{ flex: 1 }}
               />
-            )}
+            ))}
             <Button
               label={t("events.detail")}
               variant="secondary"

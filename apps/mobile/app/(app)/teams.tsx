@@ -3,15 +3,14 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
-import { getMyOrganizations, getMyTeams, type Organization, type Team, type TeamStatus } from "@/features/teams/api";
-import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
+import { getMyTeams, type Team, type TeamStatus } from "@/features/teams/api";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function TeamsScreen() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamStatusFilter, setTeamStatusFilter] = useState<TeamStatus | null>("active");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,9 +22,7 @@ export default function TeamsScreen() {
             ([activeTeams, archivedTeams]) => [...activeTeams, ...archivedTeams]
           )
         : getMyTeams({ status });
-    const [nextOrganizations, nextTeams] = await Promise.all([getMyOrganizations(), teamsRequest]);
-    setOrganizations(nextOrganizations);
-    setTeams(nextTeams);
+    setTeams(await teamsRequest);
   }
 
   async function handleLoadTeams() {
@@ -95,17 +92,6 @@ export default function TeamsScreen() {
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("teams.organizations")}</Text>
-        {isEmptyLoad(loadState, organizations.length) ? <Text style={styles.muted}>{t("teams.noOrganizations")}</Text> : null}
-        {organizations.map((organization) => (
-          <View key={organization.id} style={styles.organizationRow}>
-            <Text style={styles.secondaryText}>{organization.name}</Text>
-            <Text style={styles.muted}>{organization.slug}</Text>
-            {organization.logo_url ? <Text style={styles.muted}>{organization.logo_url}</Text> : null}
-          </View>
-        ))}
-      </View>
       {teams.map((team) => (
         <View key={team.id} style={styles.card}>
           <Text style={styles.cardTitle}>{team.name}</Text>
@@ -180,12 +166,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 20,
     fontWeight: "800"
-  },
-  organizationRow: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    gap: 3,
-    padding: 12
   },
   filterRow: {
     flexDirection: "row",

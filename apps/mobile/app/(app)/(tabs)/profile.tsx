@@ -181,11 +181,6 @@ export default function ProfileTabScreen() {
       {home?.team.id ? (
         <>
           <ListRow
-            title={t("teams.home")}
-            leftIcon="home-outline"
-            onPress={() => router.push({ pathname: "/teams/[teamId]", params: { teamId: home.team.id } })}
-          />
-          <ListRow
             title={t("teams.coins")}
             leftIcon="cash-outline"
             onPress={() => router.push({ pathname: "/teams/[teamId]/coins", params: { teamId: home.team.id } })}
