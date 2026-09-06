@@ -115,9 +115,10 @@ export default function TeamCoinsScreen() {
     const [nextBalance, nextTransactions] = nextRole === "member"
       ? await Promise.all([getCoinBalance(teamId), getMyCoinTransactions(teamId, transactionQuery)])
       : [null, []];
-    const [nextRules, nextMembers] = canManageWithNextRole
-      ? await Promise.all([getCoinRules(teamId), getTeamMembers(teamId)])
-      : [[], []];
+    const [nextRules, nextMembers] = await Promise.all([
+      getCoinRules(teamId),
+      canManageWithNextRole ? getTeamMembers(teamId) : Promise.resolve([])
+    ]);
     setCurrentRole(nextRole);
     setBalance(nextBalance?.balance ?? null);
     setRules(nextRules);
@@ -348,10 +349,21 @@ export default function TeamCoinsScreen() {
           )}
         </View>
       ) : null}
-      {currentRole === "member" ? (
+      {currentRole === "member" && loadState.status === "success" ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t("coins.rules")}</Text>
-          <Text style={styles.muted}>{t("coins.captainOnlyHint")}</Text>
+          {defaultRuleInputs.map(({ trigger, labelKey }) => {
+            const rule = selectEffectiveCoinRule(rules, trigger);
+            return (
+              <View key={trigger} style={styles.transactionRow}>
+                <Text style={styles.secondaryText}>{t(labelKey)}</Text>
+                <Text style={styles.secondaryText}>
+                  {rule === null ? t("coins.ruleNotConfigured") : `${rule.amount} ${t("coins.unit")}`}
+                </Text>
+              </View>
+            );
+          })}
+          <Text style={styles.muted}>{t("coins.signupRewardHint")}</Text>
         </View>
       ) : null}
       {canManageCoins

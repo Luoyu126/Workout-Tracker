@@ -43,7 +43,7 @@ function nodes(node: ReactNode): Props[] {
   return [node.props, ...nodes(node.props.children)];
 }
 function text(node: ReactNode): string {
-  if (typeof node === "string") return node;
+  if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(text).join(" ");
   return isValidElement<Props>(node) ? text(node.props.children) : "";
 }
@@ -92,5 +92,41 @@ test("member retains their balance and transaction history", async () => {
   expect(text(ui)).toContain("coins.myTransactions");
   expect(h.balance).toHaveBeenCalledWith("team");
   expect(h.transactions).toHaveBeenCalledOnce();
-  expect(h.rules).not.toHaveBeenCalled();
+  expect(h.rules).toHaveBeenCalledWith("team");
+  expect(h.members).not.toHaveBeenCalled();
+});
+
+test("member sees active training and match rewards as read-only, including zero amounts", async () => {
+  h.team.mockResolvedValue({ current_membership: { role: "member" } });
+  h.rules.mockResolvedValue([
+    { id: "training", trigger_type: "training_signup", amount: 0, is_active: true },
+    { id: "match", trigger_type: "match_signup", amount: 37, is_active: true },
+    { id: "old-match", trigger_type: "match_signup", amount: 99, is_active: false }
+  ]);
+  const content = text(await load());
+  for (const label of ["coins.rules", "coins.training", "coins.match", "0 coins.unit", "37 coins.unit"]) {
+    expect(content).toContain(label);
+  }
+  for (const label of ["coins.captainOnlyHint", "coins.saveRule", "coins.manualAdjustment", "99 coins.unit", "coins.ruleNotConfigured"]) {
+    expect(content).not.toContain(label);
+  }
+});
+
+test("member sees unconfigured rules only after a successful response", async () => {
+  h.team.mockResolvedValue({ current_membership: { role: "member" } });
+  h.rules.mockResolvedValue([{ trigger_type: "training_signup", amount: 10, is_active: false }]);
+  const content = text(await load());
+  expect(content.match(/coins.ruleNotConfigured/g)).toHaveLength(2);
+  expect(content).not.toContain("10 coins.unit");
+});
+
+test("rule load failure remains an error without showing unconfigured or default amounts", async () => {
+  h.team.mockResolvedValue({ current_membership: { role: "member" } });
+  const error = new Error("unavailable");
+  h.rules.mockRejectedValue(error);
+  const ui = await load();
+  expect(nodes(ui).find((node) => node.loadState)?.loadState).toEqual({ status: "error", error });
+  expect(text(ui)).not.toContain("coins.ruleNotConfigured");
+  expect(text(ui)).not.toContain("coins.rules");
+  expect(h.rules).toHaveBeenCalledOnce();
 });
