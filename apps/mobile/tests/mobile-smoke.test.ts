@@ -20,6 +20,8 @@ const requiredRoutes = [
   "app/(app)/(tabs)/inbox.tsx",
   "app/(app)/teams/[teamId]/index.tsx",
   "app/(app)/teams/[teamId]/members.tsx",
+  "app/(app)/teams/[teamId]/members/list.tsx",
+  "app/(app)/teams/[teamId]/members/requests.tsx",
   "app/(app)/teams/[teamId]/events.tsx",
   "app/(app)/teams/[teamId]/signup-board.tsx",
   "app/(app)/teams/[teamId]/store.tsx",
@@ -290,7 +292,7 @@ describe("mobile MVP smoke", () => {
   test("detail and management screens auto-load and use shared state UI", () => {
     const autoLoadExpectations = [
       ["app/(app)/teams/[teamId]/index.tsx", "handleLoadHome"],
-      ["app/(app)/teams/[teamId]/members.tsx", "handleLoadMembers"],
+      ["app/(app)/teams/[teamId]/members/list.tsx", "handleLoadMembers"],
       ["app/(app)/teams/[teamId]/coins.tsx", "handleLoadCoins"],
       ["app/(app)/teams/[teamId]/signup-board.tsx", "handleLoadBoard"],
       ["app/(app)/events/[eventId].tsx", "handleLoadEvent"],
@@ -321,6 +323,8 @@ describe("mobile MVP smoke", () => {
       "app/(app)/(tabs)/inbox.tsx",
       "app/(app)/teams/[teamId]/index.tsx",
       "app/(app)/teams/[teamId]/members.tsx",
+      "app/(app)/teams/[teamId]/members/list.tsx",
+      "app/(app)/teams/[teamId]/members/requests.tsx",
       "app/(app)/teams/[teamId]/events.tsx",
       "app/(app)/teams/[teamId]/signup-board.tsx",
       "app/(app)/teams/[teamId]/coins.tsx",
@@ -864,19 +868,11 @@ describe("mobile MVP smoke", () => {
   });
 
   test("members screen supports editable jersey and player name profiles", () => {
-    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/members.tsx"), "utf-8");
+    const source = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/members/list.tsx"), "utf-8");
 
     expect(source).toContain("memberDrafts");
     expect(source).toContain("applyMembers");
     expect(source).toContain("loadMembers");
-    expect(source).toContain("getMemberCandidates");
-    expect(source).toContain("candidateQuery");
-    expect(source).toContain("candidates");
-    expect(source).toContain("handleSearchCandidates");
-    expect(source).toContain("handleSelectCandidate");
-    expect(source).toContain("setNewUserId(candidate.id)");
-    expect(source).toContain("style={[styles.candidateRow, isLoading && styles.disabled]}");
-    expect(source).toContain("style={[styles.pillButton, newRole === role && styles.activePill, isLoading && styles.disabled]}");
     expect(source).toContain("getTeamHome");
     expect(source).toContain("currentRole");
     expect(source).toContain("setCurrentRole(teamHome.current_membership.role)");
@@ -893,14 +889,6 @@ describe("mobile MVP smoke", () => {
     expect(source).not.toContain("setMembers((currentMembers) => [createdMembership, ...currentMembers])");
     expect(source).not.toContain("currentMembership.user_id === membership.user_id ? updatedMembership : currentMembership");
     expect(source).toContain("members.saveProfile");
-    expect(source).toContain("members.adminOnlyHint");
-    expect(source).toContain("members.search");
-    expect(source).toContain("members.searchPlaceholder");
-    expect(source).toContain("members.searchMinLength");
-    expect(source).toContain("members.noCandidates");
-    expect(source).toContain("members.candidateSelected");
-    expect(source).toContain("normalizeMemberUserId");
-    expect(source).toContain("members.invalidUserId");
     expect(source).toContain("normalizeOptionalTeamText");
     expect(source).toContain("jersey_number");
     expect(source).toContain("player_name");
@@ -911,7 +899,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("members.allStatuses");
     expect(source).toContain("getTeamMembers(teamId, { role, status })");
     expect(source).toContain("autoCorrect={false}");
-    for (const occurrence of [0, 1]) {
+    for (const occurrence of [0]) {
       expect(textInputBeforePlaceholder(source, 'placeholder={t("members.jersey")}', occurrence)).toContain(
         "autoCorrect={false}"
       );

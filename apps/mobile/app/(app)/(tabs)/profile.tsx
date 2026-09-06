@@ -162,17 +162,19 @@ export default function ProfileTabScreen() {
         </View>
       </Card>
 
-      <ListRow
-        title={t("profile.viewMembers")}
-        leftIcon="people-outline"
-        onPress={() => {
-          if (home?.team.id) {
-            router.push({ pathname: "/teams/[teamId]/members", params: { teamId: home.team.id } });
-          } else {
-            router.push("/teams");
-          }
-        }}
-      />
+      {role !== "admin" ? (
+        <ListRow
+          title={t("profile.viewMembers")}
+          leftIcon="people-outline"
+          onPress={() => {
+            if (home?.team.id) {
+              router.push({ pathname: "/teams/[teamId]/members", params: { teamId: home.team.id } });
+            } else {
+              router.push("/teams");
+            }
+          }}
+        />
+      ) : null}
       <ListRow
         title={t("home.openTeams")}
         leftIcon="shirt-outline"

@@ -25,12 +25,21 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ teamId: "team", storeItemId: "item" })
 }));
 vi.mock("@/components/ui", () => ({
+  Avatar: "avatar", ListRow: "list-row",
   Badge: "badge", Button: "button", Card: "card", EmptyState: "empty", Screen: "screen",
   SegmentedControl: "segments", TextField: "field"
 }));
 vi.mock("@/components/ScreenState", () => ({ ScreenState: "state" }));
+vi.mock("@/components/LanguageToggle", () => ({ LanguageToggle: "language" }));
+vi.mock("@/providers/AuthProvider", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
+vi.mock("@/features/auth/api", () => ({
+  getMyProfile: vi.fn().mockResolvedValue({ name: "User", email: "user@example.com" }),
+  syncProfile: vi.fn(), updateProfile: vi.fn()
+}));
 vi.mock("@/providers/TeamProvider", () => ({ useTeamContext: () => ({
-  selectedTeamId: "team", role: h.role, home: { team: { name: "Team" } }, loadState: { status: "success" }
+  selectedTeamId: "team", role: h.role,
+  home: { team: { id: "team", name: "Team" }, current_membership: { role: h.role, jersey_number: null, player_name: null } },
+  loadState: { status: "success" }
 }) }));
 vi.mock("@/lib/i18n/I18nProvider", () => ({ useI18n: () => ({ t: (key: string) => key, locale: "en" }) }));
 vi.mock("@/lib/api/errors", () => ({ formatApiError: () => "failed" }));
@@ -56,6 +65,7 @@ import Store from "../app/(app)/(tabs)/store";
 import Inbox from "../app/(app)/(tabs)/inbox";
 import TeamStore from "../app/(app)/teams/[teamId]/store";
 import Detail from "../app/(app)/store-items/[storeItemId]";
+import Profile from "../app/(app)/(tabs)/profile";
 
 type Props = { children?: ReactNode; headerRight?: ReactNode; label?: string; title?: string; options?: { label: string }[] };
 function text(node: ReactNode): string {
@@ -106,6 +116,15 @@ test("admin inbox contains only announcement controls", async () => {
     expect(ui).not.toContain(key);
   }
   expect(h.notifications).not.toHaveBeenCalled(); expect(h.unread).not.toHaveBeenCalled();
+});
+test("admin profile uses my teams instead of a direct member-list entry", async () => {
+  const ui = await render(Profile);
+  expect(ui).not.toContain("profile.viewMembers");
+  expect(ui).toContain("home.openTeams");
+});
+test("member profile retains the direct member-list entry", async () => {
+  h.role = "member";
+  expect(await render(Profile)).toContain("profile.viewMembers");
 });
 test("member inbox retains filters without device settings", async () => {
   h.role = "member";
