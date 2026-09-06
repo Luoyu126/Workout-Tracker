@@ -52,8 +52,18 @@ export default function StoreTabScreen() {
   const [imageUrl, setImageUrl] = useState("");
   const [price, setPrice] = useState("50");
   const [stock, setStock] = useState("10");
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string } | null>(null);
+  const message = feedback?.message ?? null;
+  const setMessage = useCallback((nextMessage: string | null) => {
+    setFeedback(nextMessage === null ? null : { message: nextMessage });
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (feedback === null || isLoading) return;
+    const timer = setTimeout(() => setFeedback(null), 3000);
+    return () => clearTimeout(timer);
+  }, [feedback, isLoading]);
 
   const refreshStore = useCallback(async () => {
     if (!selectedTeamId) {
@@ -257,7 +267,7 @@ export default function StoreTabScreen() {
       headerRight={
         canManageStore ? (
           <Pressable accessibilityRole="button" onPress={() => setShowManage((value) => !value)}>
-            <Text style={styles.manageLink}>{t("store.manage")}</Text>
+            <Text style={styles.manageLink}>{t("store.addItem")}</Text>
           </Pressable>
         ) : null
       }
