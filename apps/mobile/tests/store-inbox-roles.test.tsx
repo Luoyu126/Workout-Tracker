@@ -122,9 +122,11 @@ test("admin profile uses my teams instead of a direct member-list entry", async 
   expect(ui).not.toContain("profile.viewMembers");
   expect(ui).toContain("home.openTeams");
 });
-test("member profile retains the direct member-list entry", async () => {
+test("member profile also uses my teams instead of a direct member-list entry", async () => {
   h.role = "member";
-  expect(await render(Profile)).toContain("profile.viewMembers");
+  const ui = await render(Profile);
+  expect(ui).not.toContain("profile.viewMembers");
+  expect(ui).toContain("home.openTeams");
 });
 test("member inbox retains filters without device settings", async () => {
   h.role = "member";
