@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.common.enums import (
+    EventType,
     MembershipRole,
     MembershipStatus,
     SignupStatus,
@@ -350,6 +351,7 @@ def signup_board(
     user: User,
     starts_after: datetime | None = None,
     starts_before: datetime | None = None,
+    event_types: list[EventType] | None = None,
 ) -> list[dict[str, object]]:
     get_active_membership(session, team_id, user.id)
     data = queries.load_signup_board_data(
@@ -357,6 +359,7 @@ def signup_board(
         team_id=team_id,
         starts_after=starts_after,
         starts_before=starts_before,
+        event_types=event_types,
     )
     signup_by_event_and_user = {
         (signup.event_id, signup.user_id): signup.status for signup in data.signups

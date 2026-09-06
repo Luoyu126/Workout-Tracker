@@ -5768,6 +5768,25 @@
               ],
               "title": "Starts Before"
             }
+          },
+          {
+            "in": "query",
+            "name": "event_types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/EventType"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Types"
+            }
           }
         ],
         "responses": {

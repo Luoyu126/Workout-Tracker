@@ -163,7 +163,7 @@ export function getTeamHome(teamId: string) {
 
 export function getTeamSignupBoard(
   teamId: string,
-  options?: { startsAfter?: string | null; startsBefore?: string | null }
+  options?: { startsAfter?: string | null; startsBefore?: string | null; eventTypes?: Array<"training" | "match" | "other"> }
 ) {
   const params = new URLSearchParams();
   if (options?.startsAfter) {
@@ -171,6 +171,9 @@ export function getTeamSignupBoard(
   }
   if (options?.startsBefore) {
     params.set("starts_before", options.startsBefore);
+  }
+  for (const eventType of options?.eventTypes ?? []) {
+    params.append("event_types", eventType);
   }
   const query = params.toString();
   return apiRequest<SignupBoardRow[]>(`/api/v1/teams/${teamId}/signup-board${query ? `?${query}` : ""}`);

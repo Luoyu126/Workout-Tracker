@@ -455,6 +455,69 @@ def test_signup_board_returns_rates_and_date_filters(session: Session) -> None:
     assert recent_player_row["going_rate"] == 1.0
 
 
+@pytest.mark.parametrize(
+    ("event_types", "total", "going", "not_going"),
+    [
+        ([EventType.training], 1, 1, 0),
+        ([EventType.match], 1, 0, 1),
+        ([EventType.training, EventType.match], 2, 1, 1),
+        ([EventType.training, EventType.training], 1, 1, 0),
+        (None, 3, 1, 1),
+    ],
+)
+def test_signup_board_combines_type_and_date_filters(
+    session: Session,
+    event_types: list[EventType] | None,
+    total: int,
+    going: int,
+    not_going: int,
+) -> None:
+    team, admin, player, missing_player = _seed_team(session)
+    now = datetime.now(UTC)
+    for membership in session.scalars(select(TeamMembership).where(TeamMembership.team_id == team.id)):
+        membership.joined_at = now - timedelta(days=60)
+    for event_type, age, state, signup_status in [
+        (EventType.training, 1, EventStatus.completed, SignupStatus.going),
+        (EventType.match, 2, EventStatus.completed, SignupStatus.not_going),
+        (EventType.other, 3, EventStatus.completed, SignupStatus.maybe),
+        (EventType.training, 30, EventStatus.completed, SignupStatus.going),
+        (EventType.match, 1, EventStatus.published, SignupStatus.going),
+        (EventType.training, -1, EventStatus.completed, SignupStatus.going),
+    ]:
+        event = Event(
+            team_id=team.id,
+            type=event_type,
+            title=f"{event_type.value} {age} {state.value}",
+            start_time=now - timedelta(days=age),
+            end_time=now - timedelta(days=age) + timedelta(hours=1),
+            status=state,
+            created_by=admin.id,
+        )
+        session.add(event)
+        session.flush()
+        session.add(EventSignup(
+            event_id=event.id,
+            user_id=player.id,
+            status=signup_status,
+            note="Leave" if signup_status == SignupStatus.not_going else None,
+        ))
+    session.commit()
+
+    rows = signup_board(
+        session, team.id, admin,
+        starts_after=now - timedelta(days=7), starts_before=now,
+        event_types=event_types,
+    )
+    assert {row["user_id"] for row in rows} == {player.id, missing_player.id}
+    row = next(row for row in rows if row["user_id"] == player.id)
+    assert row["total"] == total
+    assert row["going"] == going
+    assert row["not_going"] == not_going
+    assert row["going_rate"] == round(going / total, 4)
+    missing_row = next(row for row in rows if row["user_id"] == missing_player.id)
+    assert missing_row["maybe"] == total
+
+
 def test_signup_board_requires_current_team_membership(session: Session) -> None:
     team, admin, player, _missing_player = _seed_team(session)
     other_org = Organization(name="Other Signup Org", slug=f"other-signup-{uuid4().hex[:8]}")

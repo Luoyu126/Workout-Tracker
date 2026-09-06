@@ -296,6 +296,17 @@ describe("feature API contracts", () => {
     });
   });
 
+  test("signup board serializes multiple event types", async () => {
+    const { getTeamSignupBoard } = await import("../src/features/teams/api");
+
+    getTeamSignupBoard("team-1", { eventTypes: ["training", "match"] });
+    expect(apiRequestMock).toHaveBeenLastCalledWith(
+      "/api/v1/teams/team-1/signup-board?event_types=training&event_types=match"
+    );
+    getTeamSignupBoard("team-1", { eventTypes: ["match"] });
+    expect(apiRequestMock).toHaveBeenLastCalledWith("/api/v1/teams/team-1/signup-board?event_types=match");
+  });
+
   test("coin APIs call expected endpoints and rule bodies", async () => {
     vi.stubGlobal("crypto", {
       randomUUID: vi

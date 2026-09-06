@@ -1,92 +1,98 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
-import { parseOptionalIsoDateTime } from "@/features/events/validation";
 import { getTeamSignupBoard, type SignupBoardRow } from "@/features/teams/api";
+import {
+  signupBoardDateRange,
+  toggleSignupBoardEventType,
+  type SignupBoardEventType,
+  type SignupBoardPeriod
+} from "@/features/teams/signupBoardFilters";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function TeamSignupBoardScreen() {
+  const [message, setMessage] = useState<string | null>(null);
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [rows, setRows] = useState<SignupBoardRow[]>([]);
-  const [startsAfter, setStartsAfter] = useState("");
-  const [startsBefore, setStartsBefore] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [period, setPeriod] = useState<SignupBoardPeriod>("all");
+  const [eventTypes, setEventTypes] = useState<SignupBoardEventType[]>(["training", "match"]);
+  const requestVersion = useRef(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  async function handleLoadBoard() {
+  const handleLoadBoard = useCallback(async () => {
     if (!teamId) {
       return;
     }
-    const parsedStartsAfter = parseOptionalIsoDateTime(startsAfter);
-    const parsedStartsBefore = parseOptionalIsoDateTime(startsBefore);
-    if (
-      (startsAfter.trim().length > 0 && parsedStartsAfter === null) ||
-      (startsBefore.trim().length > 0 && parsedStartsBefore === null)
-    ) {
-      setMessage(t("signupBoard.invalidDateTime"));
-      return;
-    }
+    const version = ++requestVersion.current;
     setIsLoading(true);
+    setRows([]);
     setMessage(null);
     try {
       const nextRows = await getTeamSignupBoard(teamId, {
-        startsAfter: parsedStartsAfter,
-        startsBefore: parsedStartsBefore
+        ...signupBoardDateRange(period),
+        eventTypes
       });
+      if (version !== requestVersion.current) return;
       setRows(nextRows);
       if (nextRows.length === 0) {
         setMessage(t("signupBoard.noRows"));
       }
     } catch (error) {
+      if (version !== requestVersion.current) return;
       setMessage(formatApiError(error, t));
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  }
+  }, [teamId, period, eventTypes, t]);
 
   useEffect(() => {
     if (teamId) {
       void handleLoadBoard();
     }
-  }, [teamId]);
+    return () => { requestVersion.current += 1; };
+  }, [teamId, handleLoadBoard]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{t("signupBoard.title")}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("signupBoard.filters")}</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setStartsAfter}
-          placeholder={t("signupBoard.startsAfter")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={startsAfter}
-        />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setStartsBefore}
-          placeholder={t("signupBoard.startsBefore")}
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={startsBefore}
-        />
+        <View style={styles.filterRow}>
+          {(["week", "month", "all"] as const).map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: period === value }}
+              onPress={() => setPeriod(value)}
+              style={[styles.filterButton, period === value && styles.selectedButton]}
+            >
+              <Text style={[styles.filterText, period === value && styles.selectedText]}>
+                {t(`signupBoard.${value}`)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.filterRow}>
+          <Text style={styles.muted}>{t("signupBoard.type")}</Text>
+          {(["training", "match"] as const).map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: eventTypes.includes(value) }}
+              onPress={() => setEventTypes((selected) => toggleSignupBoardEventType(selected, value))}
+              style={[styles.filterButton, eventTypes.includes(value) && styles.selectedButton]}
+            >
+              <Text style={[styles.filterText, eventTypes.includes(value) && styles.selectedText]}>
+                {t(`signupBoard.${value}`)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        disabled={isLoading}
-        onPress={handleLoadBoard}
-        style={[styles.button, isLoading && styles.disabled]}
-      >
-        <Text style={styles.buttonText}>{t("signupBoard.load")}</Text>
-      </Pressable>
       <ScreenState
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
@@ -126,17 +132,29 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 10
   },
-  button: {
+  filterRow: {
     alignItems: "center",
-    backgroundColor: colors.accent,
+    flexDirection: "row",
+    gap: 8
+  },
+  filterButton: {
+    alignItems: "center",
+    backgroundColor: colors.background,
     borderRadius: 12,
-    minHeight: 52,
+    flex: 1,
+    minHeight: 44,
     justifyContent: "center"
   },
-  buttonText: {
-    color: colors.accentText,
+  selectedButton: {
+    backgroundColor: colors.accent
+  },
+  filterText: {
+    color: colors.text,
     fontSize: 16,
     fontWeight: "800"
+  },
+  selectedText: {
+    color: colors.accentText
   },
   card: {
     backgroundColor: colors.surface,
@@ -149,14 +167,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800"
   },
-  input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    color: colors.text,
-    fontSize: 16,
-    minHeight: 48,
-    paddingHorizontal: 14
-  },
   rate: {
     color: colors.accent,
     fontSize: 32,
@@ -165,8 +175,5 @@ const styles = StyleSheet.create({
   muted: {
     color: colors.muted,
     fontSize: 14
-  },
-  disabled: {
-    opacity: 0.7
   }
 });

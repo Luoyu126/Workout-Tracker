@@ -678,6 +678,8 @@ GET /api/v1/teams/{team_id}/signup-board
 
 仅统计 completed 活动，支持 starts_after、starts_before 参数。按活动开始时有资格参与的 role=member 队员聚合每位队员的 `going` / `maybe` / `not_going` 次数、`total` 与 `going_rate`，并附带每名队员的 `user` 摘要用于移动端排行榜展示。admin 不进入排行榜；无报名记录按 `maybe` 计入。
 
+可选 `event_types` 为可重复的查询参数，使用 Event.type 的枚举值 `training`、`match`、`other`。例如 `?event_types=training&event_types=match` 将两种活动合并统计；省略时保留统计全部类型的既有行为。类型筛选与时间筛选同时生效；`starts_after`、`starts_before` 分别包含开始和结束边界，比较 Event.start_time。无效类型返回 422。
+
 ## 11. 比赛 API
 
 ### 11.1 新增实时记录

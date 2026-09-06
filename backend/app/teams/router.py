@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.common.database import get_db
 from app.common.dependencies import current_user
-from app.common.enums import MembershipRole, MembershipStatus, TeamStatus
+from app.common.enums import EventType, MembershipRole, MembershipStatus, TeamStatus
 from app.models import Team, TeamMembership, User
 from app.teams.schemas import (
     MemberCandidateRead,
@@ -81,8 +81,9 @@ def read_signup_board(
     starts_before: datetime | None = Query(default=None),
     user: User = Depends(current_user),
     session: Session = Depends(get_db),
+    event_types: list[EventType] | None = Query(default=None),
 ) -> list[dict[str, object]]:
-    return signup_board(session, team_id, user, starts_after, starts_before)
+    return signup_board(session, team_id, user, starts_after, starts_before, event_types)
 
 
 @router.get("/teams/{team_id}", response_model=TeamRead)

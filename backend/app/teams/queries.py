@@ -5,7 +5,14 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.common.enums import EventStatus, MembershipRole, MembershipStatus, SignupStatus, TeamStatus
+from app.common.enums import (
+    EventStatus,
+    EventType,
+    MembershipRole,
+    MembershipStatus,
+    SignupStatus,
+    TeamStatus,
+)
 from app.models import CoinTransaction, Event, EventSignup, Organization, Team, TeamMembership, User
 
 
@@ -71,8 +78,11 @@ def load_signup_board_data(
     team_id: UUID,
     starts_after: datetime | None,
     starts_before: datetime | None,
+    event_types: list[EventType] | None = None,
 ) -> SignupBoardData:
     event_stmt = select(Event).where(Event.team_id == team_id, Event.status == EventStatus.completed)
+    if event_types is not None:
+        event_stmt = event_stmt.where(Event.type.in_(event_types))
     if starts_after is not None:
         event_stmt = event_stmt.where(Event.start_time >= starts_after)
     if starts_before is not None:
