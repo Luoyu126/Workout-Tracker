@@ -13,6 +13,7 @@ import {
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { parseMatchMinute } from "@/features/events/validation";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { normalizeRequiredText } from "@/lib/validation/text";
 import { colors } from "@/theme/colors";
@@ -20,6 +21,7 @@ import { colors } from "@/theme/colors";
 const LIVE_BOARD_POLL_INTERVAL_MS = 5000;
 
 export default function LiveBoardScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { t } = useI18n();
   const [board, setBoard] = useState<LiveBoard | null>(null);
@@ -43,10 +45,12 @@ export default function LiveBoardScreen() {
       setIsLoading(true);
     }
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       setBoard(await getLiveBoard(eventId));
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       if (options.showLoading) {
         setIsLoading(false);
@@ -60,13 +64,15 @@ export default function LiveBoardScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       const nextBoard = await getLiveBoard(eventId);
       setBoard(nextBoard);
       const teamHome = await getTeamHome(nextBoard.event.team_id);
       setCurrentRole(teamHome.current_membership.role);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +202,7 @@ export default function LiveBoardScreen() {
         <Text style={styles.buttonText}>{t("match.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}

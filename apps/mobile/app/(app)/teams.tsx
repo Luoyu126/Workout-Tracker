@@ -4,16 +4,16 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
 import { getMyOrganizations, getMyTeams, type Organization, type Team, type TeamStatus } from "@/features/teams/api";
-import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function TeamsScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamStatusFilter, setTeamStatusFilter] = useState<TeamStatus | null>("active");
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   async function loadTeams(status: TeamStatus | null) {
@@ -26,18 +26,16 @@ export default function TeamsScreen() {
     const [nextOrganizations, nextTeams] = await Promise.all([getMyOrganizations(), teamsRequest]);
     setOrganizations(nextOrganizations);
     setTeams(nextTeams);
-    if (nextTeams.length === 0) {
-      setMessage(t("teams.noTeams"));
-    }
   }
 
   async function handleLoadTeams() {
     setIsLoading(true);
-    setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await loadTeams(teamStatusFilter);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -50,11 +48,12 @@ export default function TeamsScreen() {
   async function handleSelectTeamStatus(status: TeamStatus | null) {
     setTeamStatusFilter(status);
     setIsLoading(true);
-    setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await loadTeams(status);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -87,17 +86,18 @@ export default function TeamsScreen() {
         <Text style={styles.buttonText}>{t("teams.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
-        message={message}
+        emptyMessage={teams.length === 0 ? t("teams.noTeams") : null}
         onRetry={handleLoadTeams}
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("teams.organizations")}</Text>
-        {organizations.length === 0 ? <Text style={styles.muted}>{t("teams.noOrganizations")}</Text> : null}
+        {isEmptyLoad(loadState, organizations.length) ? <Text style={styles.muted}>{t("teams.noOrganizations")}</Text> : null}
         {organizations.map((organization) => (
           <View key={organization.id} style={styles.organizationRow}>
             <Text style={styles.secondaryText}>{organization.name}</Text>

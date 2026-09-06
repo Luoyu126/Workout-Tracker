@@ -21,6 +21,7 @@ import {
 } from "@/features/store/api";
 import { parseStoreNumbers } from "@/features/store/validation";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { generateClientUuid } from "@/lib/uuid";
 import { useTeamContext } from "@/providers/TeamProvider";
@@ -32,9 +33,10 @@ function canRedeemItem(item: StoreItem) {
 }
 
 export default function StoreTabScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const router = useRouter();
-  const { selectedTeamId, role, home } = useTeamContext();
+  const { selectedTeamId, role, home, loadState: teamLoadState, refresh: refreshTeam } = useTeamContext();
   const canManageStore = role === "captain" || role === "admin";
   const [items, setItems] = useState<StoreItem[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
@@ -60,7 +62,7 @@ export default function StoreTabScreen() {
     }
     const [nextItems, nextBalance, nextMyRedemptions] = await Promise.all([
       getStoreItems(selectedTeamId, { isActive: canManageStore ? itemActiveFilter : true }),
-      getCoinBalance(selectedTeamId).catch(() => null),
+      getCoinBalance(selectedTeamId),
       getMyRedemptions(selectedTeamId, { status: myRedemptionStatus })
     ]);
     setItems(nextItems);
@@ -86,13 +88,12 @@ export default function StoreTabScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await refreshStore();
-      if (items.length === 0) {
-        // refreshed below
-      }
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -104,8 +105,10 @@ export default function StoreTabScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     void refreshStore()
-      .catch((error) => setMessage(formatApiError(error, t)))
+      .then(() => setLoadState({ status: "success" }))
+      .catch((error: unknown) => setLoadState({ status: "error", error }))
       .finally(() => setIsLoading(false));
   }, [selectedTeamId, itemActiveFilter, myRedemptionStatus, managedRedemptionStatus, refreshStore, t]);
 
@@ -258,7 +261,7 @@ export default function StoreTabScreen() {
         ) : null
       }
     >
-      {!selectedTeamId ? (
+      {!selectedTeamId && teamLoadState.status === "success" ? (
         <EmptyState title={t("teams.noTeams")} actionLabel={t("home.openLogin")} onAction={() => router.push("/login")} />
       ) : null}
 
@@ -316,14 +319,18 @@ export default function StoreTabScreen() {
       ) : null}
 
       <ScreenState
+        loadState={teamLoadState.status === "success" ? loadState : teamLoadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
         message={message}
-        onRetry={() => void handleLoad()}
+        onRetry={teamLoadState.status === "error" ? () => void refreshTeam() : () => void handleLoad()}
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />
+      {teamLoadState.status === "success" && isEmptyLoad(loadState, items.length) ? (
+        <EmptyState title={t("store.noItems")} />
+      ) : null}
 
       <View style={styles.grid}>
         {items.map((item) => {
@@ -397,7 +404,7 @@ export default function StoreTabScreen() {
           { value: "fulfilled", label: t("store.status.fulfilled") }
         ]}
       />
-      {myRedemptions.length === 0 ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
+      {teamLoadState.status === "success" && isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
       {myRedemptions.map((redemption) => (
         <Card key={redemption.id}>
           <Badge label={t(`store.status.${redemption.status}`)} />

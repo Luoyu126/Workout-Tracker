@@ -24,6 +24,7 @@ import {
 } from "@/features/events/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
@@ -37,6 +38,7 @@ function selectableStatusFromSignup(signup: EventSignup): SelectableSignupStatus
 }
 
 export default function EventDetailScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const router = useRouter();
   const { t } = useI18n();
@@ -106,14 +108,16 @@ export default function EventDetailScreen() {
     }
     setIsLoading(true);
     clearMessage();
+    setLoadState({ status: "loading" });
     try {
       const bundle = await loadEventBundle();
       if (bundle) {
         applyLoadedEvent(bundle.loadedEvent, bundle.loadedSignup);
         setCurrentRole(bundle.currentRole);
       }
+      setLoadState({ status: "success" });
     } catch (error) {
-      showError(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -376,6 +380,7 @@ export default function EventDetailScreen() {
           <Text style={styles.buttonText}>{t("events.load")}</Text>
         </Pressable>
         <ScreenState
+          loadState={loadState}
           isLoading={isLoading}
           authRequiredLabel={t("common.authRequired")}
           loadingLabel={t("common.loading")}

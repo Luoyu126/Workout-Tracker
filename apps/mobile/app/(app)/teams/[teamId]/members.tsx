@@ -16,6 +16,7 @@ import {
 } from "@/features/teams/api";
 import { normalizeMemberUserId, normalizeOptionalTeamText } from "@/features/teams/validation";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
@@ -25,6 +26,8 @@ type MemberDraft = {
 };
 
 export default function TeamMembersScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
+  const [candidateLoadState, setCandidateLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [members, setMembers] = useState<Membership[]>([]);
@@ -75,10 +78,12 @@ export default function TeamMembersScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await loadMembers(filterRole, filterStatus);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -137,14 +142,13 @@ export default function TeamMembersScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setCandidateLoadState({ status: "loading" });
     try {
       const nextCandidates = await getMemberCandidates(teamId, candidateQuery);
       setCandidates(nextCandidates);
-      if (nextCandidates.length === 0) {
-        setMessage(t("members.noCandidates"));
-      }
+      setCandidateLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setCandidateLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -210,10 +214,12 @@ export default function TeamMembersScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await loadMembers(role, filterStatus);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -226,10 +232,12 @@ export default function TeamMembersScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       await loadMembers(filterRole, status);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -337,12 +345,22 @@ export default function TeamMembersScreen() {
         <Text style={styles.buttonText}>{t("members.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
         message={message}
         onRetry={handleLoadMembers}
         retryLabel={t("common.retry")}
+        signInLabel={t("home.openLogin")}
+      />
+      <ScreenState
+        loadState={candidateLoadState}
+        emptyMessage={candidates.length === 0 ? t("members.noCandidates") : null}
+        loadingLabel={t("common.loading")}
+        onRetry={handleSearchCandidates}
+        retryLabel={t("common.retry")}
+        authRequiredLabel={t("common.authRequired")}
         signInLabel={t("home.openLogin")}
       />
       <View style={styles.card}>

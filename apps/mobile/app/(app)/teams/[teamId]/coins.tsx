@@ -26,6 +26,7 @@ import {
 import { parseOptionalIsoDateTime } from "@/features/events/validation";
 import { getTeamHome, getTeamMembers, type Membership, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { generateClientUuid } from "@/lib/uuid";
@@ -59,6 +60,8 @@ type PendingManualAdjustmentRequest = {
 };
 
 export default function TeamCoinsScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
+  const [memberLoadState, setMemberLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [rules, setRules] = useState<CoinRule[]>([]);
@@ -103,11 +106,11 @@ export default function TeamCoinsScreen() {
 
   async function refreshCoinData() {
     if (!teamId) {
-      return;
+      return false;
     }
     const transactionQuery = buildTransactionQuery(transactionType);
     if (transactionQuery === null) {
-      return;
+      return false;
     }
     const [teamHome, nextBalance, nextTransactions] = await Promise.all([
       getTeamHome(teamId),
@@ -134,6 +137,7 @@ export default function TeamCoinsScreen() {
       }
       return nextAmounts;
     });
+    return true;
   }
 
   async function handleLoadCoins() {
@@ -142,10 +146,12 @@ export default function TeamCoinsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      await refreshCoinData();
+      const loaded = await refreshCoinData();
+      setLoadState({ status: loaded ? "success" : "idle" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -270,15 +276,18 @@ export default function TeamCoinsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setMemberLoadState({ status: "loading" });
     try {
       const memberTransactionQuery = buildTransactionQuery(memberTransactionType);
       if (memberTransactionQuery === null) {
+        setMemberLoadState({ status: "idle" });
         return;
       }
       setTargetUserId(normalizedUserId);
       setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery));
+      setMemberLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setMemberLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -295,10 +304,12 @@ export default function TeamCoinsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       setTransactions(await getMyCoinTransactions(teamId, transactionQuery));
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -323,11 +334,13 @@ export default function TeamCoinsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setMemberLoadState({ status: "loading" });
     try {
       setTargetUserId(normalizedUserId);
       setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery));
+      setMemberLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setMemberLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -346,12 +359,21 @@ export default function TeamCoinsScreen() {
         <Text style={styles.buttonText}>{t("coins.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
         message={message}
         onRetry={handleLoadCoins}
         retryLabel={t("common.retry")}
+        signInLabel={t("home.openLogin")}
+      />
+      <ScreenState
+        loadState={memberLoadState}
+        loadingLabel={t("common.loading")}
+        onRetry={() => void handleLoadMemberTransactions()}
+        retryLabel={t("common.retry")}
+        authRequiredLabel={t("common.authRequired")}
         signInLabel={t("home.openLogin")}
       />
       {balance != null ? (
@@ -398,7 +420,7 @@ export default function TeamCoinsScreen() {
             value={createdBefore}
           />
         </View>
-        {transactions.length === 0 ? (
+        {isEmptyLoad(loadState, transactions.length) ? (
           <Text style={styles.muted}>{t("coins.noTransactions")}</Text>
         ) : (
           transactions.slice(0, 10).map((transaction) => (
@@ -465,7 +487,7 @@ export default function TeamCoinsScreen() {
             style={styles.input}
             value={targetUserId}
           />
-          {members.length === 0 ? <Text style={styles.muted}>{t("coins.noMembers")}</Text> : null}
+          {isEmptyLoad(loadState, members.length) ? <Text style={styles.muted}>{t("coins.noMembers")}</Text> : null}
           {members.map((membership) => (
             <Pressable
               accessibilityRole="button"
@@ -560,7 +582,7 @@ export default function TeamCoinsScreen() {
             </Pressable>
           ))}
         </View>
-        {memberTransactions.length === 0 ? (
+        {isEmptyLoad(memberLoadState, memberTransactions.length) ? (
           <Text style={styles.muted}>{t("coins.noMemberTransactions")}</Text>
         ) : (
           memberTransactions.slice(0, 10).map((transaction) => (

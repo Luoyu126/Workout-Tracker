@@ -2,6 +2,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import * as SecureStore from "expo-secure-store";
 
 import { getMyTeams, getTeamHome, type MembershipRole, type Team, type TeamHome } from "@/features/teams/api";
+import type { LoadState } from "@/lib/api/loadState";
 import { useAuth } from "@/providers/AuthProvider";
 
 const SELECTED_TEAM_KEY = "workout-tracker.selected-team-id";
@@ -13,6 +14,7 @@ type TeamContextValue = {
   role: MembershipRole | null;
   isLoading: boolean;
   error: unknown;
+  loadState: LoadState;
   refresh: () => Promise<void>;
   selectTeam: (teamId: string) => Promise<void>;
 };
@@ -45,7 +47,8 @@ export function TeamProvider({ children }: PropsWithChildren) {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [home, setHome] = useState<TeamHome | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
+  const error = loadState.status === "error" ? loadState.error : null;
   const requestVersionRef = useRef(0);
 
   const reset = useCallback(() => {
@@ -53,7 +56,7 @@ export function TeamProvider({ children }: PropsWithChildren) {
     setSelectedTeamId(null);
     setHome(null);
     setIsLoading(false);
-    setError(null);
+    setLoadState({ status: "idle" });
   }, []);
 
   const load = useCallback(async (preferredTeamId?: string | null) => {
@@ -62,7 +65,7 @@ export function TeamProvider({ children }: PropsWithChildren) {
     }
     const requestVersion = ++requestVersionRef.current;
     setIsLoading(true);
-    setError(null);
+    setLoadState({ status: "loading" });
     try {
       const nextTeams = await getMyTeams({ status: "active" });
       if (requestVersion !== requestVersionRef.current) {
@@ -72,6 +75,7 @@ export function TeamProvider({ children }: PropsWithChildren) {
       if (nextTeams.length === 0) {
         setSelectedTeamId(null);
         setHome(null);
+        setLoadState({ status: "success" });
         await writeSelectedTeamId(null);
         return;
       }
@@ -86,11 +90,12 @@ export function TeamProvider({ children }: PropsWithChildren) {
       const nextHome = await getTeamHome(nextSelected);
       if (requestVersion === requestVersionRef.current) {
         setHome(nextHome);
+        setLoadState({ status: "success" });
       }
     } catch (loadError) {
       if (requestVersion === requestVersionRef.current) {
         setHome(null);
-        setError(loadError);
+        setLoadState({ status: "error", error: loadError });
       }
     } finally {
       if (requestVersion === requestVersionRef.current) {
@@ -105,18 +110,19 @@ export function TeamProvider({ children }: PropsWithChildren) {
     }
     const requestVersion = ++requestVersionRef.current;
     setIsLoading(true);
-    setError(null);
+    setLoadState({ status: "loading" });
     try {
       setSelectedTeamId(teamId);
       await writeSelectedTeamId(teamId);
       const nextHome = await getTeamHome(teamId);
       if (requestVersion === requestVersionRef.current) {
         setHome(nextHome);
+        setLoadState({ status: "success" });
       }
     } catch (loadError) {
       if (requestVersion === requestVersionRef.current) {
         setHome(null);
-        setError(loadError);
+        setLoadState({ status: "error", error: loadError });
       }
     } finally {
       if (requestVersion === requestVersionRef.current) {
@@ -143,10 +149,11 @@ export function TeamProvider({ children }: PropsWithChildren) {
       role: home?.current_membership.role ?? null,
       isLoading,
       error,
+      loadState,
       refresh: () => load(selectedTeamId),
       selectTeam
     }),
-    [teams, selectedTeamId, home, isLoading, error, load, selectTeam]
+    [teams, selectedTeamId, home, isLoading, error, loadState, load, selectTeam]
   );
 
   return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;

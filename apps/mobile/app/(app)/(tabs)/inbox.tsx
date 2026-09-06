@@ -23,6 +23,7 @@ import {
 } from "@/features/notifications/deviceToken";
 import { getMyTeams, type Team } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { useTeamContext } from "@/providers/TeamProvider";
@@ -72,6 +73,7 @@ function signupStatusTone(status: SignupStatus | undefined): "accent" | "muted" 
 }
 
 export default function InboxTabScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId?: string }>();
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -123,7 +125,7 @@ export default function InboxTabScreen() {
     setSignupsByEventId(nextSignups);
   }
 
-  async function loadNotifications(nextUnreadOnly: boolean, options: { showEmptyMessage: boolean }) {
+  async function loadNotifications(nextUnreadOnly: boolean) {
     const [nextNotifications, nextUnreadCount, nextAnnouncementTeams] = await Promise.all([
       getNotifications({ teamId: scopedTeamId, unreadOnly: nextUnreadOnly }),
       getUnreadCount({ teamId: scopedTeamId }),
@@ -133,18 +135,17 @@ export default function InboxTabScreen() {
     setUnreadCount(nextUnreadCount.count);
     setAnnouncementTeams(nextAnnouncementTeams);
     await loadEventSignups(nextNotifications);
-    if (options.showEmptyMessage && nextNotifications.length === 0) {
-      setMessage(t("inbox.noNotifications"));
-    }
   }
 
   async function handleLoadNotifications() {
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      await loadNotifications(unreadOnly, { showEmptyMessage: true });
+      await loadNotifications(unreadOnly);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +166,7 @@ export default function InboxTabScreen() {
     setMessage(null);
     try {
       await markNotificationRead(notificationId);
-      await loadNotifications(unreadOnly, { showEmptyMessage: false });
+      await loadNotifications(unreadOnly);
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -181,7 +182,7 @@ export default function InboxTabScreen() {
       for (const item of unread) {
         await markNotificationRead(item.id);
       }
-      await loadNotifications(unreadOnly, { showEmptyMessage: false });
+      await loadNotifications(unreadOnly);
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -273,7 +274,7 @@ export default function InboxTabScreen() {
       setAnnouncementTitle("");
       setAnnouncementBody("");
       setMessage(t("inbox.announcementSent"));
-      await loadNotifications(unreadOnly, { showEmptyMessage: false });
+      await loadNotifications(unreadOnly);
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -286,10 +287,12 @@ export default function InboxTabScreen() {
     setUnreadOnly(nextUnreadOnly);
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      await loadNotifications(nextUnreadOnly, { showEmptyMessage: true });
+      await loadNotifications(nextUnreadOnly);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -341,6 +344,7 @@ export default function InboxTabScreen() {
       />
 
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
@@ -350,7 +354,7 @@ export default function InboxTabScreen() {
         signInLabel={t("home.openLogin")}
       />
 
-      {notifications.length === 0 && !isLoading ? <EmptyState title={t("inbox.noNotifications")} /> : null}
+      {isEmptyLoad(loadState, notifications.length) && !isLoading ? <EmptyState title={t("inbox.noNotifications")} /> : null}
 
       {notifications.map((notification) => {
         const eventSignup = isActionableEventNotification(notification)

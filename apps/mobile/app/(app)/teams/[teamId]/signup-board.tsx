@@ -10,12 +10,12 @@ import {
   type SignupBoardEventType,
   type SignupBoardPeriod
 } from "@/features/teams/signupBoardFilters";
-import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function TeamSignupBoardScreen() {
-  const [message, setMessage] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [rows, setRows] = useState<SignupBoardRow[]>([]);
@@ -31,7 +31,7 @@ export default function TeamSignupBoardScreen() {
     const version = ++requestVersion.current;
     setIsLoading(true);
     setRows([]);
-    setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       const nextRows = await getTeamSignupBoard(teamId, {
         ...signupBoardDateRange(period),
@@ -39,12 +39,10 @@ export default function TeamSignupBoardScreen() {
       });
       if (version !== requestVersion.current) return;
       setRows(nextRows);
-      if (nextRows.length === 0) {
-        setMessage(t("signupBoard.noRows"));
-      }
+      setLoadState({ status: "success" });
     } catch (error) {
       if (version !== requestVersion.current) return;
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       if (version === requestVersion.current) setIsLoading(false);
     }
@@ -94,10 +92,11 @@ export default function TeamSignupBoardScreen() {
         </View>
       </View>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
-        message={message}
+        emptyMessage={rows.length === 0 ? t("signupBoard.noRows") : null}
         onRetry={handleLoadBoard}
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}

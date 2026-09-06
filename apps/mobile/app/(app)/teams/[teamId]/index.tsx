@@ -6,10 +6,12 @@ import { ScreenState } from "@/components/ScreenState";
 import { getTeamHome, updateTeam, type TeamHome } from "@/features/teams/api";
 import { normalizeOptionalTeamText, normalizeTeamName } from "@/features/teams/validation";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function TeamHomeScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [home, setHome] = useState<TeamHome | null>(null);
@@ -28,14 +30,16 @@ export default function TeamHomeScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       const loadedHome = await getTeamHome(teamId);
       setHome(loadedHome);
       setTeamName(loadedHome.team.name);
       setTeamDescription(loadedHome.team.description ?? "");
       setTeamLogoUrl(loadedHome.team.logo_url ?? "");
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -117,6 +121,7 @@ export default function TeamHomeScreen() {
         <Text style={styles.buttonText}>{t("teamHome.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
@@ -209,7 +214,7 @@ export default function TeamHomeScreen() {
           </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t("teamHome.admins")}</Text>
-            {home.admins.length === 0 ? (
+            {isEmptyLoad(loadState, home.admins.length) ? (
               <Text style={styles.muted}>{t("teamHome.noAdmins")}</Text>
             ) : (
               home.admins.map((admin) => (
@@ -221,7 +226,7 @@ export default function TeamHomeScreen() {
           </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t("teamHome.upcomingEvents")}</Text>
-            {home.upcoming_events.length === 0 ? (
+            {isEmptyLoad(loadState, home.upcoming_events.length) ? (
               <Text style={styles.muted}>{t("events.noEvents")}</Text>
             ) : (
               home.upcoming_events.map((event) => (

@@ -92,6 +92,20 @@ describe("mobile MVP smoke", () => {
     expect(joinSource).toContain('messageTone={messageTone}');
   });
 
+  test("event empty states do not offer retry unless loading failed", () => {
+    const tabSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/events.tsx"), "utf-8");
+    const managementSource = readFileSync(resolve(appRoot, "app/(app)/teams/[teamId]/events.tsx"), "utf-8");
+
+    for (const source of [tabSource, managementSource]) {
+      expect(source).toContain('useState<LoadState>({ status: "idle" })');
+      expect(source).toContain('setLoadState({ status: "success" })');
+      expect(source).toContain('setLoadState({ status: "error", error })');
+      expect(source).toContain('retryLabel={t("common.retry")}');
+    }
+    expect(tabSource).toContain('teamLoadState.status === "error" ? () => void refreshTeam() : () => void loadEvents()');
+    expect(managementSource).toContain("onRetry={handleLoadEvents}");
+  });
+
   test("core list screens use shared loading, empty, error and retry state UI", () => {
     const stateComponent = readFileSync(resolve(appRoot, "src/components/ScreenState.tsx"), "utf-8");
     const layoutSource = readFileSync(resolve(appRoot, "app/_layout.tsx"), "utf-8");
@@ -104,7 +118,7 @@ describe("mobile MVP smoke", () => {
     expect(stateComponent).toContain("authRequiredLabel");
     expect(stateComponent).toContain("signInLabel");
     expect(stateComponent).toContain('messageTone = "error"');
-    expect(stateComponent).toContain("!isLoading && !isSuccess && message && retryLabel && onRetry");
+    expect(stateComponent).toContain("!loading && canRetryLoad(loadState) && retryLabel && onRetry");
 
     const errors = readFileSync(resolve(appRoot, "src/lib/api/errors.ts"), "utf-8");
     const i18nProvider = readFileSync(resolve(appRoot, "src/lib/i18n/I18nProvider.tsx"), "utf-8");
@@ -296,7 +310,15 @@ describe("mobile MVP smoke", () => {
     for (const route of apiBackedScreens) {
       const source = readFileSync(resolve(appRoot, route), "utf-8");
 
-      expect(source).toContain("formatApiError");
+      if (route === "app/login.tsx") {
+        expect(source).toContain('canRetryLoad({ status: "error", error: authError })');
+        continue;
+      }
+      expect(source).toContain("loadState={");
+      const errorOwner = route === "app/(app)/(tabs)/index.tsx"
+        ? readFileSync(resolve(appRoot, "src/providers/TeamProvider.tsx"), "utf-8")
+        : source;
+      expect(errorOwner).toContain('setLoadState({ status: "error",');
     }
 
     const homeSource = readFileSync(resolve(appRoot, "app/(app)/(tabs)/index.tsx"), "utf-8");
@@ -562,7 +584,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("style={[styles.pillButton, eventType === \"match\" && styles.activePill, isLoading && styles.disabled]}");
     expect(source).toContain("style={[styles.pillButton, filterType === type && styles.activePill, isLoading && styles.disabled]}");
     expect(source).toContain("style={[styles.pillButton, filterStatus === status && styles.activePill, isLoading && styles.disabled]}");
-    expect(source).toContain("await loadEvents(filterType, filterStatus, { showEmptyMessage: false });");
+    expect(source).toContain("await loadEvents(filterType, filterStatus);");
     expect(source).toContain("startsAfter");
     expect(source).toContain("startsBefore");
     expect(source).toContain("events.filters");
@@ -714,7 +736,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("loadNotifications");
     expect(source).toContain("handleToggleUnreadOnly");
     expect(source).toContain("const nextUnreadOnly = !unreadOnly");
-    expect(source).toContain("await loadNotifications(nextUnreadOnly, { showEmptyMessage: true });");
+    expect(source).toContain("await loadNotifications(nextUnreadOnly);");
     expect(source).toContain("getNotifications({ teamId: scopedTeamId, unreadOnly: nextUnreadOnly })");
     expect(source).toContain("getUnreadCount({ teamId: scopedTeamId })");
     expect(source).toContain("getDefaultDevicePlatform");

@@ -11,11 +11,13 @@ import {
 } from "@/features/teams/api";
 import { normalizeTeamSearchQuery } from "@/features/teams/validation";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
 export default function JoinTeamScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
@@ -31,6 +33,7 @@ export default function JoinTeamScreen() {
   async function handleSearch(queryOverride?: string) {
     const normalizedQuery = normalizeTeamSearchQuery(queryOverride ?? query);
     if (normalizedQuery === null) {
+      setLoadState({ status: "idle" });
       setMessageTone("error");
       setMessage(t("teams.searchMinLength"));
       setRetrySearchQuery(null);
@@ -44,11 +47,13 @@ export default function JoinTeamScreen() {
     setResults([]);
     setMessage(null);
     setRetrySearchQuery(null);
+    setLoadState({ status: "loading" });
     try {
       setResults(await searchTeams(normalizedQuery));
+      setLoadState({ status: "success" });
     } catch (error) {
       setMessageTone("error");
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
       setRetrySearchQuery(normalizedQuery);
     } finally {
       setIsSearching(false);
@@ -115,6 +120,7 @@ export default function JoinTeamScreen() {
         </View>
 
         <ScreenState
+          loadState={loadState}
           isLoading={isSearching}
           loadingLabel={t("common.loading")}
           message={message}
@@ -136,7 +142,7 @@ export default function JoinTeamScreen() {
           />
         ) : null}
 
-        {hasSearched && !isSearching && !message && results.length === 0 ? (
+        {isEmptyLoad(loadState, results.length) && !isSearching && !message ? (
           <EmptyState
             title={t("teams.noSearchResults")}
             description={t("teams.noSearchResultsHint")}

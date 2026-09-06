@@ -4,11 +4,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
 import { getMatchSummary, type MatchSummary } from "@/features/events/matchApi";
-import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
 export default function MatchSummaryScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { t } = useI18n();
   const [summary, setSummary] = useState<MatchSummary | null>(null);
@@ -21,10 +22,12 @@ export default function MatchSummaryScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       setSummary(await getMatchSummary(eventId));
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -48,6 +51,7 @@ export default function MatchSummaryScreen() {
         <Text style={styles.buttonText}>{t("match.loadSummary")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
@@ -103,9 +107,9 @@ export default function MatchSummaryScreen() {
                   {row.user_id} · {t(`events.signup.${row.status}`)}
                 </Text>
               ))
-            ) : (
+            ) : loadState.status === "success" ? (
               <Text style={styles.muted}>{t("match.noSignups")}</Text>
-            )}
+            ) : null}
           </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t("match.rewardSummary")}</Text>
@@ -115,9 +119,9 @@ export default function MatchSummaryScreen() {
                   {row.user_id} · {row.amount}
                 </Text>
               ))
-            ) : (
+            ) : loadState.status === "success" ? (
               <Text style={styles.muted}>{t("match.noRewards")}</Text>
-            )}
+            ) : null}
           </View>
         </>
       ) : null}

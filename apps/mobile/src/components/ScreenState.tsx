@@ -1,13 +1,18 @@
 import { Link } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { formatApiError } from "@/lib/api/errors";
+import { canRetryLoad, type LoadState } from "@/lib/api/loadState";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 import { radius, spacing, typography } from "@/theme/tokens";
 
 type ScreenStateProps = {
+  loadState: LoadState;
   isLoading?: boolean;
   loadingLabel: string;
   message?: string | null;
+  emptyMessage?: string | null;
   // Success feedback is informational only, so it must never offer a retry action.
   messageTone?: "error" | "success";
   retryLabel?: string;
@@ -17,26 +22,33 @@ type ScreenStateProps = {
 };
 
 export function ScreenState({
+  loadState,
   isLoading = false,
   loadingLabel,
-  message,
+  message: feedbackMessage,
+  emptyMessage,
   messageTone = "error",
   retryLabel,
   onRetry,
   authRequiredLabel,
   signInLabel
 }: ScreenStateProps) {
-  if (!isLoading && !message) {
+  const { t } = useI18n();
+  const loading = isLoading || loadState.status === "loading";
+  const errorMessage = loadState.status === "error" ? formatApiError(loadState.error, t) : null;
+  const message = loading ? null : errorMessage ?? feedbackMessage ?? (loadState.status === "success" ? emptyMessage : null);
+  const additionalFeedback = !loading && errorMessage && feedbackMessage !== errorMessage ? feedbackMessage : null;
+  if (!loading && !message) {
     return null;
   }
-  const isSuccess = messageTone === "success";
+  const isSuccess = loadState.status !== "error" && messageTone === "success";
   const shouldShowSignIn = Boolean(
     !isSuccess && message && authRequiredLabel && signInLabel && message === authRequiredLabel
   );
 
   return (
     <View accessibilityLiveRegion="polite" style={styles.container}>
-      {isLoading ? (
+      {loading ? (
         <View style={styles.loadingRow}>
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.loadingText}>{loadingLabel}</Text>
@@ -45,14 +57,17 @@ export function ScreenState({
       {message ? (
         <Text style={[styles.messageText, isSuccess && styles.successText]}>{message}</Text>
       ) : null}
-      {!isLoading && shouldShowSignIn ? (
+      {additionalFeedback ? (
+        <Text style={[styles.messageText, messageTone === "success" && styles.successText]}>{additionalFeedback}</Text>
+      ) : null}
+      {!loading && shouldShowSignIn ? (
         <Link href="/login" asChild>
           <Pressable accessibilityRole="button" style={styles.retryButton}>
             <Text style={styles.retryText}>{signInLabel}</Text>
           </Pressable>
         </Link>
       ) : null}
-      {!isLoading && !isSuccess && message && retryLabel && onRetry ? (
+      {!loading && canRetryLoad(loadState) && retryLabel && onRetry ? (
         <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retryButton}>
           <Text style={styles.retryText}>{retryLabel}</Text>
         </Pressable>

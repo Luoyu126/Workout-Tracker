@@ -14,6 +14,7 @@ import {
 import { isValidEventSchedule, parseIsoDateTime, parseOptionalIsoDateTime } from "@/features/events/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { colors } from "@/theme/colors";
 
@@ -22,6 +23,7 @@ function getDefaultStartTime() {
 }
 
 export default function TeamEventsScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [events, setEvents] = useState<TeamEvent[]>([]);
@@ -58,19 +60,17 @@ export default function TeamEventsScreen() {
     };
   }
 
-  async function loadEvents(type: EventType | null, status: EventStatus | null, options: { showEmptyMessage: boolean }) {
+  async function loadEvents(type: EventType | null, status: EventStatus | null) {
     if (!teamId) {
-      return;
+      return false;
     }
     const query = buildEventsQuery(type, status);
     if (query === null) {
-      return;
+      return false;
     }
     const nextEvents = await getTeamEvents(teamId, query);
     setEvents(nextEvents);
-    if (options.showEmptyMessage && nextEvents.length === 0) {
-      setMessage(t("events.noEvents"));
-    }
+    return true;
   }
 
   async function handleLoadEvents() {
@@ -79,14 +79,20 @@ export default function TeamEventsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      const [teamHome] = await Promise.all([
+      const [teamHome, eventsLoaded] = await Promise.all([
         getTeamHome(teamId),
-        loadEvents(filterType, filterStatus, { showEmptyMessage: true })
+        loadEvents(filterType, filterStatus)
       ]);
+      if (!eventsLoaded) {
+        setLoadState({ status: "idle" });
+        return;
+      }
       setCurrentRole(teamHome.current_membership.role);
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -146,7 +152,7 @@ export default function TeamEventsScreen() {
             })
           : await createEvent(teamId, eventInput);
       setCreatedEvent(createdEvent);
-      await loadEvents(filterType, filterStatus, { showEmptyMessage: false });
+      await loadEvents(filterType, filterStatus);
       setTitle("");
       setDescription("");
       setLocation("");
@@ -169,10 +175,15 @@ export default function TeamEventsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      await loadEvents(type, filterStatus, { showEmptyMessage: true });
+      if (!await loadEvents(type, filterStatus)) {
+        setLoadState({ status: "idle" });
+        return;
+      }
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -185,10 +196,15 @@ export default function TeamEventsScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      await loadEvents(filterType, status, { showEmptyMessage: true });
+      if (!await loadEvents(filterType, status)) {
+        setLoadState({ status: "idle" });
+        return;
+      }
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -304,9 +320,11 @@ export default function TeamEventsScreen() {
         <Text style={styles.buttonText}>{t("events.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
+        emptyMessage={events.length === 0 ? t("events.noEvents") : null}
         message={message}
         onRetry={handleLoadEvents}
         retryLabel={t("common.retry")}

@@ -20,6 +20,7 @@ import {
 import { parseRedemptionQuantity, parseStoreNumbers } from "@/features/store/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
+import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
@@ -70,6 +71,7 @@ function resetCreateItemForm() {
 }
 
 export default function TeamStoreScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [items, setItems] = useState<StoreItem[]>([]);
@@ -134,13 +136,12 @@ export default function TeamStoreScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
-      const nextItems = await refreshStoreData();
-      if (nextItems?.length === 0) {
-        setMessage(t("store.noItems"));
-      }
+      await refreshStoreData();
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -588,9 +589,11 @@ export default function TeamStoreScreen() {
         <Text style={styles.buttonText}>{t("store.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
+        emptyMessage={items.length === 0 ? t("store.noItems") : null}
         message={message}
         onRetry={handleLoadItems}
         retryLabel={t("common.retry")}
@@ -751,7 +754,7 @@ export default function TeamStoreScreen() {
           </Pressable>
         ))}
       </View>
-      {myRedemptions.length === 0 ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
+      {isEmptyLoad(loadState, myRedemptions.length) ? <Text style={styles.muted}>{t("store.noRedemptions")}</Text> : null}
       {myRedemptions.map((redemption) => renderRedemption(redemption, { manageable: false }))}
       {canManageStore ? (
         <>
@@ -771,7 +774,7 @@ export default function TeamStoreScreen() {
               </Pressable>
             ))}
           </View>
-          {managedRedemptions.length === 0 ? (
+          {isEmptyLoad(loadState, managedRedemptions.length) ? (
             <Text style={styles.muted}>{t("store.noManagedRedemptions")}</Text>
           ) : null}
           {managedRedemptions.map((redemption) => renderRedemption(redemption, { manageable: true }))}

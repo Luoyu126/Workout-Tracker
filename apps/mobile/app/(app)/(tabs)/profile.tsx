@@ -13,6 +13,7 @@ import {
 } from "@/features/auth/api";
 import { normalizeProfileInput } from "@/features/auth/validation";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
@@ -20,6 +21,7 @@ import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
 export default function ProfileTabScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const router = useRouter();
   const { signOut } = useAuth();
@@ -38,14 +40,16 @@ export default function ProfileTabScreen() {
     }
     setIsSubmitting(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       const currentProfile = await getMyProfile();
       setProfile(currentProfile);
       setName(currentProfile.name);
       setStudentId(currentProfile.student_id ?? "");
       setAvatarUrl(currentProfile.avatar_url ?? "");
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsSubmitting(false);
     }
@@ -237,6 +241,7 @@ export default function ProfileTabScreen() {
       <LanguageToggle />
 
       <ScreenState
+        loadState={loadState}
         isLoading={isSubmitting}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}

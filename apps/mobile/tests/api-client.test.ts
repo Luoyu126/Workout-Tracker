@@ -210,6 +210,16 @@ describe("apiRequest", () => {
     }));
   });
 
+  test("a successful empty list and a network failure each make only one request", async () => {
+    const { apiRequest, ApiNetworkError } = await import("../src/lib/api/client");
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([])).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(apiRequest("/api/v1/notifications")).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(apiRequest("/api/v1/notifications")).rejects.toBeInstanceOf(ApiNetworkError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   test("reads the current Supabase session for every API request", async () => {
     const { apiRequest } = await import("../src/lib/api/client");
 

@@ -6,6 +6,7 @@ import { ScreenState } from "@/components/ScreenState";
 import { getStoreItem, redeemStoreItem, type StoreItem } from "@/features/store/api";
 import { parseRedemptionQuantity } from "@/features/store/validation";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
@@ -22,6 +23,7 @@ type PendingRedemptionRequest = {
 };
 
 export default function StoreItemDetailScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { storeItemId, teamId } = useLocalSearchParams<{ storeItemId: string; teamId?: string }>();
   const { t } = useI18n();
   const [item, setItem] = useState<StoreItem | null>(null);
@@ -36,10 +38,12 @@ export default function StoreItemDetailScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       setItem(await getStoreItem(storeItemId));
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +109,7 @@ export default function StoreItemDetailScreen() {
         <Text style={styles.buttonText}>{t("store.load")}</Text>
       </Pressable>
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}

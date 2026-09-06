@@ -15,6 +15,7 @@ import {
 } from "@/features/events/api";
 import { isValidEventSchedule, parseIsoDateTime } from "@/features/events/validation";
 import { formatApiError } from "@/lib/api/errors";
+import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
@@ -25,9 +26,10 @@ function getDefaultStartTime() {
 }
 
 export default function EventsTabScreen() {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const { t } = useI18n();
   const router = useRouter();
-  const { selectedTeamId, role, home } = useTeamContext();
+  const { selectedTeamId, role, home, loadState: teamLoadState, refresh: refreshTeam } = useTeamContext();
   const canManageEvents = role === "captain" || role === "admin";
   const [events, setEvents] = useState<TeamEvent[]>([]);
   const [filterType, setFilterType] = useState<EventType | null>(null);
@@ -51,17 +53,16 @@ export default function EventsTabScreen() {
     }
     setIsLoading(true);
     setMessage(null);
+    setLoadState({ status: "loading" });
     try {
       const nextEvents = await getTeamEvents(selectedTeamId, {
         type: filterType,
         status: filterStatus
       });
       setEvents(nextEvents);
-      if (nextEvents.length === 0) {
-        setMessage(t("events.noEvents"));
-      }
+      setLoadState({ status: "success" });
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      setLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +149,7 @@ export default function EventsTabScreen() {
         ) : null
       }
     >
-      {!selectedTeamId ? (
+      {!selectedTeamId && teamLoadState.status === "success" ? (
         <EmptyState
           title={t("teams.noTeams")}
           actionLabel={t("teams.requestToJoin")}
@@ -216,11 +217,13 @@ export default function EventsTabScreen() {
       ) : null}
 
       <ScreenState
+        loadState={teamLoadState.status === "success" ? loadState : teamLoadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}
+        emptyMessage={events.length === 0 ? t("events.noEvents") : null}
         message={message}
-        onRetry={() => void loadEvents()}
+        onRetry={teamLoadState.status === "error" ? () => void refreshTeam() : () => void loadEvents()}
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />

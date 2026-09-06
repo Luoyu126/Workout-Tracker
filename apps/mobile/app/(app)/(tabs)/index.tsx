@@ -30,7 +30,7 @@ function formatEventWhen(iso: string, locale: string) {
 export default function HomeScreen() {
   const { t, locale } = useI18n();
   const router = useRouter();
-  const { teams, home, selectedTeamId, isLoading, error, refresh, selectTeam } = useTeamContext();
+  const { teams, home, selectedTeamId, isLoading, error, loadState, refresh, selectTeam } = useTeamContext();
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [signupMessage, setSignupMessage] = useState<string | null>(null);
   const [isSignupMessageSuccess, setIsSignupMessageSuccess] = useState(false);
@@ -199,11 +199,12 @@ export default function HomeScreen() {
             />
           </View>
         </Card>
-      ) : (
+      ) : loadState.status === "success" ? (
         <EmptyState title={t("home.noNextEvent")} description={t("home.noDashboard")} />
-      )}
+      ) : null}
 
       <ScreenState
+        loadState={loadState}
         isLoading={isLoading}
         authRequiredLabel={t("common.authRequired")}
         loadingLabel={t("common.loading")}

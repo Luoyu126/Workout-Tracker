@@ -7,6 +7,7 @@ import type { SyncProfileInput } from "@/features/auth/api";
 import { normalizeAuthCredentials, normalizeProfileInput } from "@/features/auth/validation";
 import { apiConfig } from "@/lib/api/client";
 import { formatApiError } from "@/lib/api/errors";
+import { canRetryLoad } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { supabaseConfig } from "@/lib/supabase/config";
 import { useAuth } from "@/providers/AuthProvider";
@@ -209,7 +210,9 @@ export default function LoginScreen() {
       {hasSessionError ? (
         <>
           <Text style={styles.message}>{formatApiError(authError, t)}</Text>
-          <Button disabled={isSubmitting} label={t("common.retry")} onPress={() => void handleRetrySession()} />
+          {canRetryLoad({ status: "error", error: authError }) ? (
+            <Button disabled={isSubmitting} label={t("common.retry")} onPress={() => void handleRetrySession()} />
+          ) : null}
           <Button
             disabled={isSubmitting}
             label={t("auth.signOut")}
