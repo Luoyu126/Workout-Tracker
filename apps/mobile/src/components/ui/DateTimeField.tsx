@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { beijingIso, beijingParts, dateLabel, daysInMonth, halfHourOptions, timeLabel, type BeijingParts } from "@/lib/datetime/beijing";
@@ -11,18 +11,49 @@ const rowHeight = 44;
 
 type Props = { label: string; value: string; onChange: (value: string) => void; disabled?: boolean };
 
-function Options({ label, values, selected, onSelect, labels }: {
+export function DateTimeOptions({ label, values, selected, onSelect, labels }: {
   label: string; values: number[]; selected: number; onSelect: (value: number) => void; labels?: string[];
 }) {
+  const listRef = useRef<FlatList<number>>(null);
+  const geometry = useRef({ height: 0, contentReady: false, positioned: false });
+  const frame = useRef<number | null>(null);
+  const selectedIndex = Math.max(0, values.findIndex((value) => value >= selected));
+  const centerSelection = useCallback(() => {
+    if (!geometry.current.height || !geometry.current.contentReady || geometry.current.positioned) return;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    // A modal can report content size before its viewport has finished laying out.
+    // Correct the initial estimate once both measurements are available.
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      if (!listRef.current) return;
+      listRef.current.scrollToIndex({ index: selectedIndex, viewPosition: 0.5, animated: false });
+      geometry.current.positioned = true;
+    });
+  }, [selectedIndex]);
+  useEffect(() => {
+    geometry.current.positioned = false;
+    centerSelection();
+    return () => { if (frame.current !== null) cancelAnimationFrame(frame.current); };
+  }, [centerSelection]);
   return (
     <View style={styles.column}>
       <Text style={styles.label}>{label}</Text>
       <FlatList
+        ref={listRef}
+        onLayout={({ nativeEvent }) => {
+          if (geometry.current.height !== nativeEvent.layout.height) geometry.current.positioned = false;
+          geometry.current.height = nativeEvent.layout.height;
+          centerSelection();
+        }}
+        onContentSizeChange={(width, height) => {
+          geometry.current.contentReady = width > 0 && height > 0;
+          centerSelection();
+        }}
         accessibilityLabel={label}
         style={styles.options}
         data={values}
         extraData={selected}
-        initialScrollIndex={Math.max(0, values.findIndex((value) => value >= selected) - 2)}
+        initialScrollIndex={Math.max(0, selectedIndex - 2)}
         getItemLayout={(_, index) => ({ length: rowHeight, offset: rowHeight * index, index })}
         keyExtractor={(value) => String(value)}
         renderItem={({ item, index }) => (
@@ -95,16 +126,16 @@ export function DateTimeField({ label, value, onChange, disabled = false }: Prop
             <Text style={styles.label}>{t("dateTime.scrollHint")}</Text>
             {draft && mode === "date" ? (
               <View style={styles.row}>
-                <Options label={t("dateTime.year")} values={years} selected={draft.year}
+                <DateTimeOptions label={t("dateTime.year")} values={years} selected={draft.year}
                   onSelect={(year) => changeCalendar(year, draft.month, draft.day)} />
-                <Options label={t("dateTime.month")} values={months} selected={draft.month}
+                <DateTimeOptions label={t("dateTime.month")} values={months} selected={draft.month}
                   onSelect={(month) => changeCalendar(draft.year, month, draft.day)} />
-                <Options key={`${draft.year}-${draft.month}`} label={t("dateTime.day")}
+                <DateTimeOptions key={`${draft.year}-${draft.month}`} label={t("dateTime.day")}
                   values={Array.from({ length: daysInMonth(draft.year, draft.month) }, (_, index) => index + 1)} selected={draft.day}
                   onSelect={(day) => changeCalendar(draft.year, draft.month, day)} />
               </View>
             ) : draft && mode === "time" ? (
-              <View style={styles.row}><Options label={t("dateTime.time")} values={halfHourOptions.map((_, index) => index)}
+              <View style={styles.row}><DateTimeOptions label={t("dateTime.time")} values={halfHourOptions.map((_, index) => index)}
                 labels={halfHourOptions.map((option) => option.label)} selected={draft.hour * 2 + draft.minute / 30}
                 onSelect={(index) => setDraft({ ...draft, hour: halfHourOptions[index].hour, minute: halfHourOptions[index].minute, second: 0, millisecond: 0 })} /></View>
             ) : null}
