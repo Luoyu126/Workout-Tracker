@@ -601,7 +601,7 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("setCurrentRole(nextRole)");
     expect(source).toContain("canManageCoins");
     expect(source).toContain("canAdjustCoins");
-    expect(source).toContain('nextRole === "captain" || nextRole === "admin"');
+    expect(source).toContain('nextRole === "admin"');
     expect(source).toContain('currentRole === "admin"');
     expect(source).toContain("!canManageCoins");
     expect(source).toContain("!canAdjustCoins");
@@ -609,7 +609,8 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("coins.adminOnlyHint");
     expect(source).toContain("coins.rules");
     expect(source).toContain("getMyCoinTransactions");
-    expect(source).toContain("getMemberCoinTransactions");
+    expect(apiSource).toContain("getMemberCoinTransactions");
+    expect(source).not.toContain("getMemberCoinTransactions");
     expect(source).toContain("getTeamMembers");
     expect(source).toContain("parseCoinRuleAmount");
     expect(functionBody(source, "handleSaveRule").indexOf("parseCoinRuleAmount(amounts[trigger])")).toBeLessThan(
@@ -625,24 +626,18 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("coins.invalidAmount");
     expect(source).toContain("coins.invalidManualAmount");
     expect(source).toContain("coins.invalidUserId");
-    expect(source).toContain("handleLoadMemberTransactions(membership.user_id)");
+    expect(source).toContain("setTargetUserId(membership.user_id)");
     expect(source).toContain("coins.chooseMember");
-    expect(source).toContain("coins.memberTransactions");
+    expect(source).not.toContain("coins.memberTransactions");
     expect(source).toContain('<Text style={styles.cardTitle}>{t("coins.chooseMember")}</Text>');
-    expect(source.match(/<Text style=\{styles\.cardTitle\}>\{t\("coins\.memberTransactions"\)\}<\/Text>/g)).toHaveLength(1);
     expect(source).toContain("coins.myTransactions");
     expect(source).toContain("transactionType");
-    expect(source).toContain("memberTransactionType");
     expect(source).toContain("handleSelectTransactionType");
-    expect(source).toContain("handleSelectMemberTransactionType");
     expect(source).toContain("onPress={() => handleSelectTransactionType(type)}");
-    expect(source).toContain("onPress={() => handleSelectMemberTransactionType(type)}");
     expect(source).toContain(
       "style={[styles.pillButton, transactionType === type && styles.activeButton, isLoading && styles.disabled]}"
     );
-    expect(source).toContain("memberTransactionType === type && styles.activeButton");
     expect(source).toContain("setTransactions(await getMyCoinTransactions(teamId, transactionQuery))");
-    expect(source).toContain("setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery))");
     expect(source).toContain("buildTransactionQuery");
     expect(source).toContain("parseOptionalIsoDateTime");
     expect(source).toContain("coins.filters");
@@ -653,7 +648,6 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("coins.captainOnlyHint");
     expect(source).not.toContain('useState("手工调整")');
     expect(source).toContain("getMyCoinTransactions(teamId, transactionQuery)");
-    expect(source).toContain("getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery)");
     expect(source).toContain("transaction.amount > 0");
     const rewardRuleAmountInput = textInputBeforePlaceholder(source, "placeholder={ruleInput.defaultAmount}");
     expect(rewardRuleAmountInput).toContain("autoCorrect={false}");

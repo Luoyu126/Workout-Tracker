@@ -8,7 +8,6 @@ import {
   createManualCoinTransaction,
   createCoinRule,
   getCoinBalance,
-  getMemberCoinTransactions,
   getMyCoinTransactions,
   getCoinRules,
   updateCoinRule,
@@ -62,12 +61,10 @@ type PendingManualAdjustmentRequest = {
 
 export default function TeamCoinsScreen() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
-  const [memberLoadState, setMemberLoadState] = useState<LoadState>({ status: "idle" });
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { t } = useI18n();
   const [rules, setRules] = useState<CoinRule[]>([]);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
-  const [memberTransactions, setMemberTransactions] = useState<CoinTransaction[]>([]);
   const [members, setMembers] = useState<Membership[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
   const [amounts, setAmounts] = useState<Record<SignupCoinRuleTrigger, string>>({
@@ -79,13 +76,12 @@ export default function TeamCoinsScreen() {
   const [adjustReason, setAdjustReason] = useState("");
   const [pendingManualAdjustment, setPendingManualAdjustment] = useState<PendingManualAdjustmentRequest | null>(null);
   const [transactionType, setTransactionType] = useState<CoinTransactionType | null>(null);
-  const [memberTransactionType, setMemberTransactionType] = useState<CoinTransactionType | null>(null);
   const [createdAfter, setCreatedAfter] = useState("");
   const [createdBefore, setCreatedBefore] = useState("");
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const canManageCoins = currentRole === "captain" || currentRole === "admin";
+  const canManageCoins = currentRole === "admin";
   const canAdjustCoins = currentRole === "admin";
 
   function buildTransactionQuery(type: CoinTransactionType | null) {
@@ -113,18 +109,17 @@ export default function TeamCoinsScreen() {
     if (transactionQuery === null) {
       return false;
     }
-    const [teamHome, nextBalance, nextTransactions] = await Promise.all([
-      getTeamHome(teamId),
-      getCoinBalance(teamId),
-      getMyCoinTransactions(teamId, transactionQuery)
-    ]);
+    const teamHome = await getTeamHome(teamId);
     const nextRole = teamHome.current_membership.role;
-    const canManageWithNextRole = nextRole === "captain" || nextRole === "admin";
+    const canManageWithNextRole = nextRole === "admin";
+    const [nextBalance, nextTransactions] = nextRole === "member"
+      ? await Promise.all([getCoinBalance(teamId), getMyCoinTransactions(teamId, transactionQuery)])
+      : [null, []];
     const [nextRules, nextMembers] = canManageWithNextRole
       ? await Promise.all([getCoinRules(teamId), getTeamMembers(teamId)])
       : [[], []];
     setCurrentRole(nextRole);
-    setBalance(nextBalance.balance);
+    setBalance(nextBalance?.balance ?? null);
     setRules(nextRules);
     setTransactions(nextTransactions);
     setMembers(nextMembers.filter((membership) => membership.status === "active"));
@@ -250,45 +245,9 @@ export default function TeamCoinsScreen() {
       await refreshCoinData();
       setTargetUserId(normalizedTargetUserId);
       setPendingManualAdjustment(null);
-      const memberTransactionQuery = buildTransactionQuery(memberTransactionType);
-      if (memberTransactionQuery !== null) {
-        setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedTargetUserId, memberTransactionQuery));
-      }
       setMessage(t("coins.adjusted"));
     } catch (error) {
       setMessage(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleLoadMemberTransactions(userId = targetUserId) {
-    if (!teamId) {
-      return;
-    }
-    if (!canManageCoins) {
-      setMessage(t("coins.captainOnlyHint"));
-      return;
-    }
-    const normalizedUserId = normalizeCoinTargetUserId(userId);
-    if (normalizedUserId === null) {
-      setMessage(t("coins.invalidUserId"));
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    setMemberLoadState({ status: "loading" });
-    try {
-      const memberTransactionQuery = buildTransactionQuery(memberTransactionType);
-      if (memberTransactionQuery === null) {
-        setMemberLoadState({ status: "idle" });
-        return;
-      }
-      setTargetUserId(normalizedUserId);
-      setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery));
-      setMemberLoadState({ status: "success" });
-    } catch (error) {
-      setMemberLoadState({ status: "error", error });
     } finally {
       setIsLoading(false);
     }
@@ -316,49 +275,19 @@ export default function TeamCoinsScreen() {
     }
   }
 
-  async function handleSelectMemberTransactionType(type: CoinTransactionType | null) {
-    setMemberTransactionType(type);
-    if (!canManageCoins) {
-      return;
-    }
-    if (!teamId || targetUserId.trim().length === 0) {
-      return;
-    }
-    const normalizedUserId = normalizeCoinTargetUserId(targetUserId);
-    if (normalizedUserId === null) {
-      setMessage(t("coins.invalidUserId"));
-      return;
-    }
-    const memberTransactionQuery = buildTransactionQuery(type);
-    if (memberTransactionQuery === null) {
-      return;
-    }
-    setIsLoading(true);
-    setMessage(null);
-    setMemberLoadState({ status: "loading" });
-    try {
-      setTargetUserId(normalizedUserId);
-      setMemberTransactions(await getMemberCoinTransactions(teamId, normalizedUserId, memberTransactionQuery));
-      setMemberLoadState({ status: "success" });
-    } catch (error) {
-      setMemberLoadState({ status: "error", error });
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{t("coins.title")}</Text>
-      <Text style={styles.muted}>{t("coins.captainOnlyHint")}</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={isLoading}
-        onPress={handleLoadCoins}
-        style={[styles.button, isLoading && styles.disabled]}
-      >
-        <Text style={styles.buttonText}>{t("coins.load")}</Text>
-      </Pressable>
+      {currentRole === "member" ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={isLoading}
+          onPress={handleLoadCoins}
+          style={[styles.button, isLoading && styles.disabled]}
+        >
+          <Text style={styles.buttonText}>{t("coins.load")}</Text>
+        </Pressable>
+      ) : null}
       <ScreenState
         loadState={loadState}
         isLoading={isLoading}
@@ -369,63 +298,57 @@ export default function TeamCoinsScreen() {
         retryLabel={t("common.retry")}
         signInLabel={t("home.openLogin")}
       />
-      <ScreenState
-        loadState={memberLoadState}
-        loadingLabel={t("common.loading")}
-        onRetry={() => void handleLoadMemberTransactions()}
-        retryLabel={t("common.retry")}
-        authRequiredLabel={t("common.authRequired")}
-        signInLabel={t("home.openLogin")}
-      />
-      {balance != null ? (
+      {currentRole === "member" && balance != null ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t("coins.myBalance")}</Text>
           <Text style={styles.balance}>{balance}</Text>
         </View>
       ) : null}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("coins.myTransactions")}</Text>
-        <Text style={styles.muted}>{t("coins.filters")}</Text>
-        <View style={styles.row}>
-          {coinTransactionTypes.map((type) => (
-            <Pressable
-              accessibilityRole="button"
-              disabled={isLoading}
-              key={type ?? "all-my-coin-transactions"}
-              onPress={() => handleSelectTransactionType(type)}
-              style={[styles.pillButton, transactionType === type && styles.activeButton, isLoading && styles.disabled]}
-            >
-              <Text style={styles.secondaryText}>
-                {type === null ? t("coins.allTransactionTypes") : t(`coins.transaction.${type}`)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.row}>
-          <DateTimeField label={t("coins.createdAfter")} value={createdAfter} onChange={setCreatedAfter} disabled={isLoading} />
-          <DateTimeField label={t("coins.createdBefore")} value={createdBefore} onChange={setCreatedBefore} disabled={isLoading} />
-        </View>
-        {isEmptyLoad(loadState, transactions.length) ? (
-          <Text style={styles.muted}>{t("coins.noTransactions")}</Text>
-        ) : (
-          transactions.slice(0, 10).map((transaction) => (
-            <View key={transaction.id} style={styles.transactionRow}>
-              <Text style={styles.transactionAmount}>
-                {transaction.amount > 0 ? "+" : ""}
-                {transaction.amount}
-              </Text>
-              <View style={styles.transactionDetail}>
-                <Text style={styles.secondaryText}>{t(`coins.transaction.${transaction.type}`)}</Text>
-                <Text style={styles.muted}>
-                  {transaction.reason ?? transaction.reference_type ?? t("coins.noReason")}
+      {currentRole === "member" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("coins.myTransactions")}</Text>
+          <Text style={styles.muted}>{t("coins.filters")}</Text>
+          <View style={styles.row}>
+            {coinTransactionTypes.map((type) => (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoading}
+                key={type ?? "all-my-coin-transactions"}
+                onPress={() => handleSelectTransactionType(type)}
+                style={[styles.pillButton, transactionType === type && styles.activeButton, isLoading && styles.disabled]}
+              >
+                <Text style={styles.secondaryText}>
+                  {type === null ? t("coins.allTransactionTypes") : t(`coins.transaction.${type}`)}
                 </Text>
-                <Text style={styles.muted}>{new Date(transaction.created_at).toLocaleString()}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.row}>
+            <DateTimeField label={t("coins.createdAfter")} value={createdAfter} onChange={setCreatedAfter} disabled={isLoading} />
+            <DateTimeField label={t("coins.createdBefore")} value={createdBefore} onChange={setCreatedBefore} disabled={isLoading} />
+          </View>
+          {isEmptyLoad(loadState, transactions.length) ? (
+            <Text style={styles.muted}>{t("coins.noTransactions")}</Text>
+          ) : (
+            transactions.slice(0, 10).map((transaction) => (
+              <View key={transaction.id} style={styles.transactionRow}>
+                <Text style={styles.transactionAmount}>
+                  {transaction.amount > 0 ? "+" : ""}
+                  {transaction.amount}
+                </Text>
+                <View style={styles.transactionDetail}>
+                  <Text style={styles.secondaryText}>{t(`coins.transaction.${transaction.type}`)}</Text>
+                  <Text style={styles.muted}>
+                    {transaction.reason ?? transaction.reference_type ?? t("coins.noReason")}
+                  </Text>
+                  <Text style={styles.muted}>{new Date(transaction.created_at).toLocaleString()}</Text>
+                </View>
               </View>
-            </View>
-          ))
-        )}
-      </View>
-      {!canManageCoins ? (
+            ))
+          )}
+        </View>
+      ) : null}
+      {currentRole === "member" ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t("coins.rules")}</Text>
           <Text style={styles.muted}>{t("coins.captainOnlyHint")}</Text>
@@ -478,7 +401,7 @@ export default function TeamCoinsScreen() {
               accessibilityRole="button"
               disabled={isLoading}
               key={membership.user_id}
-              onPress={() => handleLoadMemberTransactions(membership.user_id)}
+              onPress={() => setTargetUserId(membership.user_id)}
               style={[
                 styles.memberButton,
                 targetUserId === membership.user_id && styles.activeButton,
@@ -494,15 +417,6 @@ export default function TeamCoinsScreen() {
               </View>
             </Pressable>
           ))}
-          <Pressable
-            accessibilityRole="button"
-            disabled={isLoading}
-            onPress={() => handleLoadMemberTransactions()}
-            style={[styles.secondaryButton, isLoading && styles.disabled]}
-          >
-            <Text style={styles.secondaryText}>{t("coins.loadMemberTransactions")}</Text>
-          </Pressable>
-          {!canAdjustCoins ? <Text style={styles.muted}>{t("coins.adminOnlyHint")}</Text> : null}
         </View>
       ) : null}
       {canAdjustCoins ? (
@@ -543,50 +457,6 @@ export default function TeamCoinsScreen() {
             <Text style={styles.secondaryText}>{t("coins.createAdjustment")}</Text>
           </Pressable>
         </View>
-      ) : null}
-      {canManageCoins ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t("coins.memberTransactions")}</Text>
-        <Text style={styles.muted}>{t("coins.filters")}</Text>
-        <View style={styles.row}>
-          {coinTransactionTypes.map((type) => (
-            <Pressable
-              accessibilityRole="button"
-              disabled={isLoading}
-              key={type ?? "all-member-coin-transactions"}
-              onPress={() => handleSelectMemberTransactionType(type)}
-              style={[
-                styles.pillButton,
-                memberTransactionType === type && styles.activeButton,
-                isLoading && styles.disabled
-              ]}
-            >
-              <Text style={styles.secondaryText}>
-                {type === null ? t("coins.allTransactionTypes") : t(`coins.transaction.${type}`)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {isEmptyLoad(memberLoadState, memberTransactions.length) ? (
-          <Text style={styles.muted}>{t("coins.noMemberTransactions")}</Text>
-        ) : (
-          memberTransactions.slice(0, 10).map((transaction) => (
-            <View key={transaction.id} style={styles.transactionRow}>
-              <Text style={styles.transactionAmount}>
-                {transaction.amount > 0 ? "+" : ""}
-                {transaction.amount}
-              </Text>
-              <View style={styles.transactionDetail}>
-                <Text style={styles.secondaryText}>{t(`coins.transaction.${transaction.type}`)}</Text>
-                <Text style={styles.muted}>
-                  {transaction.reason ?? transaction.reference_type ?? t("coins.noReason")}
-                </Text>
-                <Text style={styles.muted}>{new Date(transaction.created_at).toLocaleString()}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
       ) : null}
     </ScrollView>
   );
