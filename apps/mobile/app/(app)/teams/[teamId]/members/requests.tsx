@@ -8,6 +8,7 @@ import { getTeamHome, getTeamMembers, updateTeamMember, type Membership } from "
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 export default function JoinRequestsScreen() {
@@ -21,7 +22,7 @@ export function JoinRequests({ teamId }: { teamId: string }) {
   const [requests, setRequests] = useState<Membership[]>([]);
   const [canApprove, setCanApprove] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useTransientFeedback(isSubmitting || loadState.status === "loading");
   const submitting = useRef(false);
 
   async function load() {

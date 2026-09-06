@@ -15,6 +15,7 @@ import { normalizeOptionalTeamText } from "@/features/teams/validation";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 type MemberDraft = {
@@ -31,8 +32,8 @@ export default function TeamMembersScreen() {
   const [filterStatus, setFilterStatus] = useState<MembershipStatus | null>("active");
   const [memberDrafts, setMemberDrafts] = useState<Record<string, MemberDraft>>({});
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const canManageMembers = currentRole === "admin";
 
   function applyMembers(nextMembers: Membership[]) {

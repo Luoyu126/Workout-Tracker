@@ -15,6 +15,7 @@ import { parseMatchMinute } from "@/features/events/validation";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { normalizeRequiredText } from "@/lib/validation/text";
 import { colors } from "@/theme/colors";
 
@@ -33,8 +34,8 @@ export default function LiveBoardScreen() {
   const [subOutNumber, setSubOutNumber] = useState("");
   const [subInName, setSubInName] = useState("");
   const [subInNumber, setSubInNumber] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
 
   async function refreshLiveBoard(options: { showLoading?: boolean } = {}) {

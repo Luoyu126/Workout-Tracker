@@ -22,6 +22,7 @@ import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
 
@@ -89,8 +90,8 @@ export default function TeamStoreScreen() {
   const [pendingRedemptions, setPendingRedemptions] = useState<Record<string, PendingRedemptionRequest>>({});
   const [itemDrafts, setItemDrafts] = useState<Record<string, ItemDraft>>({});
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const canManageStore = currentRole === "admin";
 
   const canRedeem = currentRole === "member";

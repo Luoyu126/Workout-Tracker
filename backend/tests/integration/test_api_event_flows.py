@@ -24,13 +24,20 @@ from app.events.router import (
     post_event,
     put_my_signup,
     read_event,
+    read_signups,
 )
-from app.events.schemas import EventCreateRequest, EventSignupUpsertRequest, EventUpdateRequest
+from app.events.schemas import (
+    EventCreateRequest,
+    EventSignupRead,
+    EventSignupUpsertRequest,
+    EventUpdateRequest,
+)
 from app.main import create_app
 from app.models import (
     CoinRule,
     CoinTransaction,
     Event,
+    EventSignup,
     Notification,
     Organization,
     Team,
@@ -174,13 +181,14 @@ def test_event_notification_is_updated_in_place_and_deleted_with_event(session: 
         )
     )
     assert notification is not None
+    assert notification.body == "原活动 已发布，请尽快确认是否参加。"
     original_id = notification.id
     original_updated_at = notification.updated_at
 
     patch_event(event.id, EventUpdateRequest(title="更新活动"), admin, session)
     updated = session.get(Notification, original_id)
     assert updated is not None
-    assert "更新活动" in updated.body
+    assert updated.body == "更新活动 已发布，请尽快确认是否参加。"
     assert updated.updated_at.replace(tzinfo=None) >= original_updated_at.replace(tzinfo=None)
     assert session.scalars(select(Notification).where(Notification.reference_id == event.id)).all() == [updated]
 
@@ -295,3 +303,71 @@ def test_signup_end_boundary_after_start(
         with pytest.raises(HTTPException) as error:
             put_my_signup(event.id, payload, member, session)
         assert error.value.status_code == 409
+
+
+@pytest.mark.parametrize("event_status", [EventStatus.published, EventStatus.completed])
+def test_signup_list_includes_current_members_without_writing_defaults(session: Session, event_status: EventStatus) -> None:
+    team, admin, member = _seed_team(session)
+    event = post_event(team.id, _payload(), admin, session)
+    event.start_time = datetime.now(UTC) - timedelta(hours=2)
+    event.end_time = datetime.now(UTC) + timedelta(hours=1)
+    event.status = event_status
+    users = {}
+    for name, status in [
+        ("Leave", MembershipStatus.active), ("Maybe", MembershipStatus.active),
+        ("Unconfirmed", MembershipStatus.active), ("Pending", MembershipStatus.pending),
+        ("Inactive", MembershipStatus.inactive),
+    ]:
+        user = _user(name)
+        session.add(user)
+        session.flush()
+        session.add(TeamMembership(
+            team_id=team.id, user_id=user.id, role=MembershipRole.member, status=status,
+            joined_at=datetime.now(UTC) - timedelta(hours=1) if status == MembershipStatus.active else None,
+        ))
+        users[name] = user
+    session.add_all([
+        EventSignup(event_id=event.id, user_id=member.id, status=SignupStatus.going),
+        EventSignup(event_id=event.id, user_id=users["Leave"].id, status=SignupStatus.not_going, note="有事请假"),
+        EventSignup(event_id=event.id, user_id=users["Maybe"].id, status=SignupStatus.maybe),
+        EventSignup(event_id=event.id, user_id=users["Inactive"].id, status=SignupStatus.going),
+    ])
+    other_event = post_event(team.id, _payload("Other event"), admin, session)
+    session.add(EventSignup(event_id=other_event.id, user_id=users["Unconfirmed"].id, status=SignupStatus.going))
+    _seed_team(session)
+    session.commit()
+    before = len(session.scalars(select(EventSignup)).all())
+    rows = read_signups(event.id, None, admin, session)
+    by_user = {row["user_id"]: row for row in rows}
+    assert set(by_user) == {member.id, users["Leave"].id, users["Maybe"].id, users["Unconfirmed"].id}
+    assert by_user[member.id]["status"] == SignupStatus.going
+    assert by_user[users["Leave"].id]["note"] == "有事请假"
+    missing = by_user[users["Unconfirmed"].id]
+    assert missing["status"] == SignupStatus.maybe
+    assert all(missing[key] is None for key in ["id", "note", "created_at", "updated_at"])
+    parsed = [EventSignupRead.model_validate(row) for row in rows]
+    names = [row.user.name for row in parsed if row.user]
+    assert names == sorted(names)
+    for status in SignupStatus:
+        assert read_signups(event.id, status, admin, session) == [row for row in rows if row["status"] == status]
+    assert len(session.scalars(select(EventSignup)).all()) == before
+    assert not session.new and not session.dirty
+
+
+def test_signup_list_rejects_members_outsiders_and_inactive_admins(session: Session) -> None:
+    team, admin, member = _seed_team(session)
+    event = post_event(team.id, _payload(), admin, session)
+    _, other_admin, _ = _seed_team(session)
+    for actor in [member, other_admin]:
+        with pytest.raises(HTTPException) as error:
+            read_signups(event.id, None, actor, session)
+        assert error.value.status_code == 403
+    membership = session.scalar(select(TeamMembership).where(
+        TeamMembership.team_id == team.id, TeamMembership.user_id == admin.id,
+    ))
+    assert membership is not None
+    membership.status = MembershipStatus.inactive
+    session.commit()
+    with pytest.raises(HTTPException) as error:
+        read_signups(event.id, None, admin, session)
+    assert error.value.status_code == 403

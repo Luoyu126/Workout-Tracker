@@ -21,6 +21,11 @@ vi.mock("react", async (importOriginal) => ({
   useEffect: (effect: () => void) => { if (!harness.started) { harness.started = true; effect(); } }
 }));
 vi.mock("expo-router", () => ({ Stack: { Screen: "header" }, useRouter: () => ({ replace: harness.replace }) }));
+// These role/request tests keep feedback state; timer behavior is covered separately.
+vi.mock("@/lib/ui/useTransientFeedback", async () => {
+  const { useState } = await import("react");
+  return { useTransientFeedback: () => useState(null) };
+});
 vi.mock("react-native", () => ({ Text: "text", StyleSheet: { create: (styles: unknown) => styles } }));
 vi.mock("@/components/ui", () => ({ Button: "button", Card: "card", Screen: "screen", SegmentedControl: "segments", TextField: "field" }));
 vi.mock("@/components/ScreenState", () => ({ ScreenState: "state" }));

@@ -77,7 +77,7 @@ def create_team_notifications(
 
 def _event_notification_content(event: Event) -> tuple[str, str]:
     title = "新比赛" if event.type == "match" else "新活动"
-    body = f"{event.title} 已发布，请在 {event.start_time.isoformat()} 前确认是否参加。"
+    body = f"{event.title} 已发布，请尽快确认是否参加。"
     return title, body
 
 

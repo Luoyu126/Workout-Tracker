@@ -8,6 +8,7 @@ import { normalizeOptionalTeamText, normalizeTeamName } from "@/features/teams/v
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 export default function TeamHomeScreen() {
@@ -18,8 +19,8 @@ export default function TeamHomeScreen() {
   const [teamName, setTeamName] = useState("");
   const [teamDescription, setTeamDescription] = useState("");
   const [teamLogoUrl, setTeamLogoUrl] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const canManageTeam =
     home?.current_membership.role === "captain" || home?.current_membership.role === "admin";
   const canUpdateTeamStatus = home?.current_membership.role === "admin";

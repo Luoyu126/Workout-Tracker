@@ -668,7 +668,9 @@ PUT /api/v1/events/{event_id}/signup
 GET /api/v1/events/{event_id}/signups
 
 仅 admin 可用，支持 status 过滤。
-响应中每条 EventSignup 包含 `user` 摘要，供管理员按姓名查看报名成员。
+响应覆盖活动所属球队当前全部 `status=active`、`role=member` 的队员，排除 admin、pending、inactive 和其他球队成员，不按活动发布或开始时的成员资格筛选。按姓名、user_id 稳定排序。
+响应中每条 EventSignup 包含 `user` 摘要，沿用现有响应字段；未提交报名的队员派生为 `status=maybe`，`id`、`note`、`created_at`、`updated_at` 为 null，不插入数据库。显式 maybe 和未提交者均属于“未确认”，status 过滤在派生默认状态后生效。请假记录包含 note 原因。
+该名单表示当前队员的报名情况，不改变完成结算和历史报名榜的成员资格口径。
 
 ## 10. 报名榜 API
 

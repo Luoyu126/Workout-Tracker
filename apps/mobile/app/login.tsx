@@ -9,6 +9,7 @@ import { apiConfig } from "@/lib/api/client";
 import { formatApiError } from "@/lib/api/errors";
 import { canRetryLoad } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { supabaseConfig } from "@/lib/supabase/config";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors } from "@/theme/colors";
@@ -30,8 +31,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [studentId, setStudentId] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isSubmitting);
   const hasApiConfigProblem = !apiConfig.isConfigured || apiConfig.isMalformed;
   const isCompletingProfile = status === "needsProfile";
   const hasSessionError = status === "error";

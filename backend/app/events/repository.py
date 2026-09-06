@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.common.enums import EventStatus, EventType, SignupStatus
+from app.common.enums import EventStatus, EventType, MembershipRole, MembershipStatus
 from app.models import Event, EventSignup, MatchDetails, MatchLogEntry, TeamMembership, User
 
 
@@ -59,21 +59,22 @@ def list_signups_with_users(
     session: Session,
     event_id: UUID,
     team_id: UUID,
-    status: SignupStatus | None,
-) -> list[tuple[EventSignup, User]]:
+) -> list[tuple[EventSignup | None, User]]:
     stmt = (
         select(EventSignup, User)
-        .join(User, User.id == EventSignup.user_id)
-        .join(
-            TeamMembership,
-            (TeamMembership.team_id == team_id)
-            & (TeamMembership.user_id == EventSignup.user_id),
+        .select_from(TeamMembership)
+        .join(User, User.id == TeamMembership.user_id)
+        .outerjoin(
+            EventSignup,
+            (EventSignup.user_id == User.id) & (EventSignup.event_id == event_id),
         )
-        .where(EventSignup.event_id == event_id, TeamMembership.role == "member")
-        .order_by(EventSignup.created_at)
+        .where(
+            TeamMembership.team_id == team_id,
+            TeamMembership.role == MembershipRole.member,
+            TeamMembership.status == MembershipStatus.active,
+        )
+        .order_by(User.name, User.id)
     )
-    if status is not None:
-        stmt = stmt.where(EventSignup.status == status)
     return [(signup, user) for signup, user in session.execute(stmt).all()]
 
 

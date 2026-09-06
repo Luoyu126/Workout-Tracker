@@ -28,6 +28,7 @@ import { getTeamHome, getTeamMembers, type Membership, type MembershipRole } fro
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
@@ -79,8 +80,8 @@ export default function TeamCoinsScreen() {
   const [createdAfter, setCreatedAfter] = useState("");
   const [createdBefore, setCreatedBefore] = useState("");
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const canManageCoins = currentRole === "admin";
   const canAdjustCoins = currentRole === "admin";
 

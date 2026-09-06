@@ -9,6 +9,7 @@ import { getTeamHome } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { generateClientUuid } from "@/lib/uuid";
 import { colors } from "@/theme/colors";
 
@@ -31,8 +32,8 @@ export default function StoreItemDetailScreen() {
   const [canRedeem, setCanRedeem] = useState(false);
   const [quantity, setQuantity] = useState("1");
   const [pendingRedemption, setPendingRedemption] = useState<PendingRedemptionRequest | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
 
   async function handleLoadItem() {
     if (!storeItemId) {

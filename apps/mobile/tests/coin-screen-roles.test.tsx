@@ -14,6 +14,11 @@ vi.mock("react", async (original) => ({
   },
   useEffect: (effect: () => void) => { if (!h.started) { h.started = true; effect(); } }
 }));
+// These role/request tests keep feedback state; timer behavior is covered separately.
+vi.mock("@/lib/ui/useTransientFeedback", async () => {
+  const { useState } = await import("react");
+  return { useTransientFeedback: () => useState(null) };
+});
 vi.mock("react-native", () => ({
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input",
   Alert: { alert: vi.fn() }, StyleSheet: { create: (value: unknown) => value }

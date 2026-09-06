@@ -27,6 +27,7 @@ import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 type SelectableSignupStatus = Extract<SignupStatus, "going" | "not_going">;
@@ -58,9 +59,9 @@ export default function EventDetailScreen() {
   const [editMatchResult, setEditMatchResult] = useState<MatchDetails["result"]>(null);
   const [editMatchNotes, setEditMatchNotes] = useState("");
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"error" | "success">("error");
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
 
   function showError(nextMessage: string) {
     setMessageTone("error");

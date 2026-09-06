@@ -13,6 +13,7 @@ import { normalizeTeamSearchQuery } from "@/features/teams/validation";
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
@@ -24,9 +25,9 @@ export default function JoinTeamScreen() {
   const [results, setResults] = useState<TeamSearchResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isSearching || loadState.status === "loading");
   const applyingTeamIdsRef = useRef(new Set<string>());
   const [applyingTeamIds, setApplyingTeamIds] = useState<Set<string>>(() => new Set());
-  const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"error" | "success">("error");
   const [retrySearchQuery, setRetrySearchQuery] = useState<string | null>(null);
 

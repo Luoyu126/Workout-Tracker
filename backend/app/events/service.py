@@ -493,18 +493,16 @@ def upsert_my_signup(
     return signup
 
 
-def _signup_read(signup: EventSignup, signup_user: User | None) -> dict[str, object]:
+def _signup_read(signup: EventSignup | None, signup_user: User, event_id: UUID) -> dict[str, object]:
     return {
-        "id": signup.id,
-        "event_id": signup.event_id,
-        "user_id": signup.user_id,
-        "status": signup.status,
-        "note": signup.note,
-        "created_at": signup.created_at,
-        "updated_at": signup.updated_at,
-        "user": None
-        if signup_user is None
-        else {
+        "id": signup.id if signup else None,
+        "event_id": event_id,
+        "user_id": signup_user.id,
+        "status": signup.status if signup else SignupStatus.maybe,
+        "note": signup.note if signup else None,
+        "created_at": signup.created_at if signup else None,
+        "updated_at": signup.updated_at if signup else None,
+        "user": {
             "id": signup_user.id,
             "name": signup_user.name,
             "email": signup_user.email,
@@ -516,12 +514,8 @@ def _signup_read(signup: EventSignup, signup_user: User | None) -> dict[str, obj
 def list_signups(session: Session, event_id: UUID, user: User, status: SignupStatus | None) -> list[dict[str, object]]:
     event = _get_event(session, event_id)
     _require_event_admin(session, event, user, "events.list_signups")
-    return [
-        _signup_read(signup, signup_user)
-        for signup, signup_user in repository.list_signups_with_users(
-            session,
-            event_id,
-            event.team_id,
-            status,
-        )
+    rows = [
+        _signup_read(signup, signup_user, event.id)
+        for signup, signup_user in repository.list_signups_with_users(session, event_id, event.team_id)
     ]
+    return [row for row in rows if status is None or row["status"] == status]

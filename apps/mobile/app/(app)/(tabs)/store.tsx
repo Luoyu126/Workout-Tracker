@@ -23,6 +23,7 @@ import { parseStoreNumbers } from "@/features/store/validation";
 import { formatApiError } from "@/lib/api/errors";
 import { isEmptyLoad, type LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { generateClientUuid } from "@/lib/uuid";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
@@ -52,18 +53,8 @@ export default function StoreTabScreen() {
   const [imageUrl, setImageUrl] = useState("");
   const [price, setPrice] = useState("50");
   const [stock, setStock] = useState("10");
-  const [feedback, setFeedback] = useState<{ message: string } | null>(null);
-  const message = feedback?.message ?? null;
-  const setMessage = useCallback((nextMessage: string | null) => {
-    setFeedback(nextMessage === null ? null : { message: nextMessage });
-  }, []);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (feedback === null || isLoading) return;
-    const timer = setTimeout(() => setFeedback(null), 3000);
-    return () => clearTimeout(timer);
-  }, [feedback, isLoading]);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
 
   const refreshStore = useCallback(async () => {
     if (!selectedTeamId) {

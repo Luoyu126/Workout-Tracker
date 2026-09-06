@@ -15,6 +15,7 @@ import { normalizeProfileInput } from "@/features/auth/validation";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
@@ -30,8 +31,8 @@ export default function ProfileTabScreen() {
   const [studentId, setStudentId] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isSubmitting || loadState.status === "loading");
   const [editing, setEditing] = useState(false);
 
   async function handleLoadProfile() {

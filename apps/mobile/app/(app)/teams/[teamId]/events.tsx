@@ -14,6 +14,7 @@ import { parseOptionalIsoDateTime } from "@/features/events/validation";
 import { getTeamHome, type MembershipRole } from "@/features/teams/api";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 export default function TeamEventsScreen() {
@@ -26,8 +27,8 @@ export default function TeamEventsScreen() {
   const [startsAfter, setStartsAfter] = useState("");
   const [startsBefore, setStartsBefore] = useState("");
   const [currentRole, setCurrentRole] = useState<MembershipRole | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
   const canManageEvents = currentRole === "admin";
 
   function buildEventsQuery(type: EventType | null, status: EventStatus | null) {

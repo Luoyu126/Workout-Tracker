@@ -9,6 +9,7 @@ import { Avatar, Badge, Button, Card, EmptyState, Screen } from "@/components/ui
 import { getMySignup, updateMySignup, type SignupStatus } from "@/features/events/api";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -32,9 +33,9 @@ export default function HomeScreen() {
   const router = useRouter();
   const { teams, home, selectedTeamId, isLoading, error, loadState, refresh, selectTeam } = useTeamContext();
   const [showTeamPicker, setShowTeamPicker] = useState(false);
-  const [signupMessage, setSignupMessage] = useState<string | null>(null);
   const [isSignupMessageSuccess, setIsSignupMessageSuccess] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [signupMessage, setSignupMessage] = useTransientFeedback(isSigningUp || isLoading || loadState.status === "loading");
   const [nextSignupStatus, setNextSignupStatus] = useState<SignupStatus | null>(null);
   const canParticipate = home?.current_membership.role === "member";
   const hasFocused = useRef(false);
@@ -225,6 +226,13 @@ export default function HomeScreen() {
               style={{ flex: 1 }}
             />
           </View>
+          {home?.current_membership.role === "admin" ? (
+            <Button
+              label={t("events.signupList")}
+              variant="secondary"
+              onPress={() => router.push({ pathname: "/events/[eventId]/signups", params: { eventId: nextEvent.id } })}
+            />
+          ) : null}
         </Card>
       ) : loadState.status === "success" ? (
         <EmptyState title={t("home.noNextEvent")} description={t("home.noDashboard")} />

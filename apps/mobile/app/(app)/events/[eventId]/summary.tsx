@@ -6,6 +6,7 @@ import { ScreenState } from "@/components/ScreenState";
 import { getMatchSummary, type MatchSummary } from "@/features/events/matchApi";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 
 export default function MatchSummaryScreen() {
@@ -13,8 +14,8 @@ export default function MatchSummaryScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { t } = useI18n();
   const [summary, setSummary] = useState<MatchSummary | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useTransientFeedback(isLoading || loadState.status === "loading");
 
   async function handleLoadSummary() {
     if (!eventId) {

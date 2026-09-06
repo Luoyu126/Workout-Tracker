@@ -2,7 +2,8 @@ import { isValidElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
-  states: [] as unknown[], refs: [] as { current: unknown }[], index: 0, refIndex: 0, focusIndex: 0,
+  states: [] as unknown[], refs: [] as { current: unknown }[], index: 0, refIndex: 0, focusIndex: 0, effectIndex: 0,
+  effects: [] as { deps: unknown[]; cleanup?: () => void }[], update: vi.fn(),
   focus: [] as (() => void | (() => void))[], signup: vi.fn(), refresh: vi.fn(), push: vi.fn(), role: "admin",
   events: [] as { id: string; title: string; type: string; start_time: string; end_time: string; location: string }[]
 }));
@@ -18,7 +19,14 @@ vi.mock("react", async (original) => ({
     if (!h.refs[index]) h.refs[index] = { current: initial };
     return h.refs[index];
   },
-  useEffect: (fn: () => void) => fn(), useMemo: (fn: () => unknown) => fn(), useCallback: (fn: unknown) => fn
+  useEffect: (fn: () => (() => void) | void, deps: unknown[]) => {
+    const index = h.effectIndex++;
+    const previous = h.effects[index];
+    if (!previous || deps.some((value, index) => value !== previous.deps[index])) {
+      previous?.cleanup?.();
+      h.effects[index] = { deps, cleanup: fn() || undefined };
+    }
+  }, useMemo: (fn: () => unknown) => fn(), useCallback: (fn: unknown) => fn
 }));
 vi.mock("expo-router", () => ({
   Link: "link", useRouter: () => ({ push: h.push }),
@@ -31,7 +39,7 @@ vi.mock("@expo/vector-icons", () => ({ Ionicons: "icon" }));
 vi.mock("@/components/LanguageToggle", () => ({ CompactLanguageToggle: "language" }));
 vi.mock("@/components/ScreenState", () => ({ ScreenState: "state" }));
 vi.mock("@/components/ui", () => ({ Avatar: "avatar", Badge: "badge", Button: "button", Card: "card", EmptyState: "empty", Screen: "screen" }));
-vi.mock("@/features/events/api", () => ({ getMySignup: h.signup, updateMySignup: vi.fn() }));
+vi.mock("@/features/events/api", () => ({ getMySignup: h.signup, updateMySignup: h.update }));
 vi.mock("@/lib/api/errors", () => ({ formatApiError: () => "failed" }));
 vi.mock("@/lib/i18n/I18nProvider", () => ({ useI18n: () => ({ t: (key: string) => key, locale: "en" }) }));
 vi.mock("@/providers/TeamProvider", () => ({ useTeamContext: () => ({
@@ -43,7 +51,7 @@ vi.mock("@/providers/TeamProvider", () => ({ useTeamContext: () => ({
 }) }));
 
 import Home from "../app/(app)/(tabs)/index";
-type Props = { children?: ReactNode; label?: string; title?: string; onPress?: () => void; style?: { flex?: number }; visible?: boolean };
+type Props = { message?: string | null; children?: ReactNode; label?: string; title?: string; onPress?: () => void; style?: { flex?: number; flexDirection?: string }; visible?: boolean };
 function nodes(node: ReactNode): Props[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!isValidElement<Props>(node)) return [];
@@ -55,14 +63,15 @@ function text(node: ReactNode): string {
   if (!isValidElement<Props>(node)) return "";
   return [node.props.label, node.props.title, text(node.props.children)].join(" ");
 }
-function render() { h.index = 0; h.refIndex = 0; h.focusIndex = 0; return Home(); }
+function render() { h.index = 0; h.refIndex = 0; h.focusIndex = 0; h.effectIndex = 0; return Home(); }
 async function focus() { h.focus.forEach((fn) => fn()); for (let i = 0; i < 10; i++) await Promise.resolve(); }
 const upcoming = { id: "event", title: "Tomorrow training", type: "training", start_time: "2099-09-10T10:00:00Z", end_time: "2099-09-10T12:00:00Z", location: "Pitch" };
 beforeEach(() => {
+  vi.useFakeTimers(); h.effects = [];
   vi.resetAllMocks(); h.states = []; h.refs = []; h.focus = []; h.role = "admin"; h.events = [upcoming];
   h.signup.mockResolvedValue({ status: "going" });
 });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { h.effects.forEach((effect) => effect.cleanup?.()); vi.useRealTimers(); vi.restoreAllMocks(); });
 test.each([
   ["training", "admin", "10:00:00", "home.trainingInProgress"],
   ["match", "admin", "11:00:00", "home.matchInProgress"],
@@ -109,4 +118,30 @@ test("member retains coin balance and personal signup", async () => {
   expect(text(ui)).toContain("home.coins");
   expect(text(ui)).toContain("home.confirmedGoing");
   expect(h.signup).toHaveBeenCalledWith("event");
+});
+test("home confirmation feedback disappears after three seconds", async () => {
+  h.role = "member";
+  h.signup.mockResolvedValue({ status: "maybe" });
+  h.update.mockResolvedValue({ status: "going" });
+  render(); await focus();
+  nodes(render()).find((node) => node.label === "home.confirmGoing")?.onPress?.();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  expect(h.update).toHaveBeenCalledWith("event", "going", null);
+  expect(nodes(render()).some((node) => node.message === "events.signupSaved")).toBe(true);
+  vi.advanceTimersByTime(2999);
+  expect(nodes(render()).some((node) => node.message === "events.signupSaved")).toBe(true);
+  vi.advanceTimersByTime(1);
+  expect(nodes(render()).some((node) => node.message === "events.signupSaved")).toBe(false);
+  expect(text(render())).toContain("home.confirmedGoing");
+});
+
+test("admin signup-list button follows event details and opens the current event", () => {
+  const buttons = nodes(render()).filter((node) => node.label);
+  const detailIndex = buttons.findIndex((node) => node.label === "events.detail");
+  const signupIndex = buttons.findIndex((node) => node.label === "events.signupList");
+  expect(signupIndex).toBeGreaterThan(detailIndex);
+  buttons[signupIndex].onPress?.();
+  expect(h.push).toHaveBeenCalledWith({ pathname: "/events/[eventId]/signups", params: { eventId: "event" } });
+  h.role = "member";
+  expect(text(render())).not.toContain("events.signupList");
 });
