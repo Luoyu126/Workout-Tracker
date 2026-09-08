@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { beijingIso, beijingParts, dateLabel, daysInMonth, halfHourOptions, timeLabel, type BeijingParts } from "@/lib/datetime/beijing";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -121,7 +121,9 @@ export function DateTimeField({ label, value, onChange, disabled = false }: Prop
       </View>
       <Modal visible={mode !== null} transparent animationType="slide" onRequestClose={() => setMode(null)}>
         <View style={styles.overlay}>
-          <View style={styles.sheet} accessibilityViewIsModal>
+          {/* Web's modal focus trap must not focus an offscreen, overscanned year
+              after the opening animation and scroll it over the selected year. */}
+          <View style={styles.sheet} accessibilityViewIsModal tabIndex={Platform.OS === "web" ? -1 : undefined}>
             <Text style={styles.title}>{label} · {t(mode === "date" ? "dateTime.date" : "dateTime.time")}</Text>
             <Text style={styles.label}>{t("dateTime.scrollHint")}</Text>
             {draft && mode === "date" ? (

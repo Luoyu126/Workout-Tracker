@@ -2,6 +2,7 @@ import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const hooks = vi.hoisted(() => ({ states: [] as unknown[], index: 0, dependencies: undefined as unknown[] | undefined }));
+const platform = vi.hoisted(() => ({ OS: "web" }));
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
   useState: (initial: unknown) => {
@@ -16,13 +17,14 @@ vi.mock("react", async (importOriginal) => ({
 }));
 vi.mock("react-native", () => ({
   View: "view", Text: "text", Pressable: "button", FlatList: "list", Modal: "modal",
+  Platform: platform,
   StyleSheet: { create: (value: unknown) => value }
 }));
 vi.mock("@/lib/i18n/I18nProvider", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
 import { DateTimeField } from "../src/components/ui/DateTimeField";
 
-type NodeProps = { children?: ReactNode; accessibilityLabel?: string; label?: string; onPress?: () => void; onSelect?: (value: number) => void; visible?: boolean; selected?: number };
+type NodeProps = { children?: ReactNode; accessibilityLabel?: string; accessibilityViewIsModal?: boolean; tabIndex?: number; label?: string; onPress?: () => void; onSelect?: (value: number) => void; visible?: boolean; selected?: number };
 function nodes(node: ReactNode): NodeProps[] {
   if (Array.isArray(node)) return node.flatMap(nodes);
   if (!isValidElement<NodeProps>(node) || node.props.visible === false) return [];
@@ -49,6 +51,27 @@ describe("date/time field interaction", () => {
   beforeEach(() => {
     hooks.states = []; hooks.index = 0; hooks.dependencies = undefined;
     value = ""; onChange.mockReset();
+    platform.OS = "web";
+  });
+
+  test.each(["date", "time"])("web %s modal offers a stable focus target before virtualized options", (mode) => {
+    value = "2026-09-07T12:00:00Z";
+    press(`Start dateTime.${mode}`);
+    const content = nodes(render());
+    const sheetIndex = content.findIndex((props) => props.accessibilityViewIsModal);
+    expect(sheetIndex).toBeGreaterThanOrEqual(0);
+    expect(content[sheetIndex].tabIndex).toBe(-1);
+    expect(sheetIndex).toBeLessThan(content.findIndex((props) => props.onSelect));
+    expect(onChange).not.toHaveBeenCalled();
+    press("common.cancel");
+    press(`Start dateTime.${mode}`);
+    expect(nodes(render()).find((props) => props.accessibilityViewIsModal)?.tabIndex).toBe(-1);
+  });
+
+  test("native modal keeps platform focus behavior", () => {
+    platform.OS = "ios";
+    press("Start dateTime.date");
+    expect(nodes(render()).find((props) => props.accessibilityViewIsModal)?.tabIndex).toBeUndefined();
   });
 
   test("requires both date and time before emitting an instant", () => {
