@@ -583,7 +583,8 @@ describe("feature API contracts", () => {
 
     expect(signUpMock).toHaveBeenCalledWith({
       email: "player@example.com",
-      password: "secret"
+      password: "secret",
+      options: { emailRedirectTo: "https://workout-tracker-web-d05k.onrender.com/login" }
     });
     expect(signInWithPasswordMock).toHaveBeenCalledWith({
       email: "player@example.com",

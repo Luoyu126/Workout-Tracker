@@ -13,6 +13,7 @@ import {
   type SyncProfileInput
 } from "@/features/auth/api";
 import { profileCheckFailureStatus, startupSessionFailureStatus, type AuthStatus } from "@/features/auth/state";
+import { consumeEmailCallback } from "@/features/auth/callback";
 import { supabase } from "@/lib/supabase/client";
 
 export type { AuthStatus } from "@/features/auth/state";
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const operationInProgressRef = useRef(false);
   const requestVersionRef = useRef(0);
   const mountedRef = useRef(true);
+  const callbackRef = useRef<ReturnType<typeof consumeEmailCallback>>(null);
 
   const commitState = useCallback((nextStatus: AuthStatus, nextError: unknown = null) => {
     if (!mountedRef.current) {
@@ -109,7 +111,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         commitState("error", sessionError);
       }
     };
+    // Keep the same promise across Strict Mode effect replays after URL cleanup.
+    callbackRef.current ??= consumeEmailCallback();
+    const callback = callbackRef.current;
+    let callbackPending = callback !== null;
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (callbackPending) return;
       if (event === "SIGNED_OUT") {
         resetSignedOutState();
         return;
@@ -122,28 +129,44 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     });
 
-    void supabase.auth
-      .getSession()
-      .then(({ data: sessionData, error: sessionError }) => {
-        // SIGNED_OUT or a newer session validation may have completed while
-        // getSession was refreshing the saved credentials.
-        if (!isCurrentStartup()) {
-          return;
+    if (callback) {
+      queryClient.clear();
+      void callback.then(
+        (session) => {
+          if (!isCurrentStartup()) return;
+          callbackPending = false;
+          return validateSession(session, true).catch(() => undefined);
+        },
+        (callbackError: unknown) => {
+          if (!isCurrentStartup()) return;
+          callbackPending = false;
+          commitState("signedOut", callbackError);
         }
-        if (sessionError) {
-          handleStartupFailure(sessionError);
-          return;
-        }
-        return validateSession(sessionData.session, true).catch(() => undefined);
-      })
-      .catch(handleStartupFailure);
+      );
+    } else {
+      void supabase.auth
+        .getSession()
+        .then(({ data: sessionData, error: sessionError }) => {
+          // SIGNED_OUT or a newer session validation may have completed while
+          // getSession was refreshing the saved credentials.
+          if (!isCurrentStartup()) {
+            return;
+          }
+          if (sessionError) {
+            handleStartupFailure(sessionError);
+            return;
+          }
+          return validateSession(sessionData.session, true).catch(() => undefined);
+        })
+        .catch(handleStartupFailure);
+    }
 
     return () => {
       mountedRef.current = false;
       requestVersionRef.current += 1;
       data.subscription.unsubscribe();
     };
-  }, [commitState, resetSignedOutState, validateSession]);
+  }, [commitState, queryClient, resetSignedOutState, validateSession]);
 
   const signInAndPrepare = useCallback(
     async (input: SignInInput) => {

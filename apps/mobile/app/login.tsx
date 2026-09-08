@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { CompactLanguageToggle } from "@/components/LanguageToggle";
 import { Button, Screen, TextField } from "@/components/ui";
 import type { SyncProfileInput } from "@/features/auth/api";
+import { AuthCallbackError } from "@/features/auth/callback";
 import { normalizeAuthCredentials, normalizeProfileInput } from "@/features/auth/validation";
 import { apiConfig } from "@/lib/api/client";
 import { formatApiError } from "@/lib/api/errors";
@@ -32,6 +33,7 @@ export default function LoginScreen() {
   const [name, setName] = useState("");
   const [studentId, setStudentId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
   const [message, setMessage] = useTransientFeedback(isSubmitting);
   const hasApiConfigProblem = !apiConfig.isConfigured || apiConfig.isMalformed;
   const isCompletingProfile = status === "needsProfile";
@@ -88,7 +90,8 @@ export default function LoginScreen() {
     try {
       const result = await signUpAndPrepare(credentials, profileInput);
       if (result === "verificationRequired") {
-        setMessage(t("auth.signUpNeedsSignIn"));
+        setAwaitingVerification(true);
+        setMode("signIn");
       }
     } catch (error) {
       setMessage(formatApiError(error, t));
@@ -163,6 +166,12 @@ export default function LoginScreen() {
 
       {!supabaseConfig.isConfigured ? <Text style={styles.message}>{t("auth.supabaseConfigMissing")}</Text> : null}
       {hasApiConfigProblem ? <Text style={styles.message}>{t("auth.apiConfigMissing")}</Text> : null}
+      {awaitingVerification && status === "signedOut" ? (
+        <Text style={styles.message}>{t("auth.signUpNeedsSignIn")}</Text>
+      ) : null}
+      {authError instanceof AuthCallbackError ? (
+        <Text style={styles.message}>{t("auth.callbackFailed")}</Text>
+      ) : null}
 
       {mode === "signUp" || isCompletingProfile ? (
         <>
@@ -205,6 +214,9 @@ export default function LoginScreen() {
             textContentType="password"
             value={password}
           />
+          {mode === "signUp" ? (
+            <Text style={styles.message}>{t("auth.passwordHint")}</Text>
+          ) : null}
         </>
       ) : null}
 

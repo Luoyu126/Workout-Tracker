@@ -1,5 +1,5 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Run the provider's startup effect with controlled promises and auth events.
 // UI routing already uses signedOut to expose the login/register form.
@@ -10,6 +10,7 @@ const harness = vi.hoisted(() => ({
   stateIndex: 0,
   clear: vi.fn(),
   getSession: vi.fn<() => Promise<{ data: { session: Session | null }; error: unknown }>>(),
+  setSession: vi.fn<() => Promise<{ data: { session: Session | null }; error: unknown }>>(),
   getMyProfile: vi.fn<() => Promise<void>>(),
   signOut: vi.fn(),
   unsubscribe: vi.fn()
@@ -37,6 +38,7 @@ vi.mock("@/features/auth/api", () => ({
 vi.mock("@/lib/supabase/client", () => ({
   supabase: { auth: {
     getSession: harness.getSession,
+    setSession: harness.setSession,
     onAuthStateChange: (listener: typeof harness.listener) => {
       harness.listener = listener;
       return { data: { subscription: { unsubscribe: harness.unsubscribe } } };
@@ -71,7 +73,10 @@ describe("AuthProvider startup restoration", () => {
     harness.states = [];
     harness.stateIndex = 0;
     harness.getMyProfile.mockResolvedValue();
+    harness.setSession.mockResolvedValue({ data: { session }, error: null });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   test("opens login for an invalid stored session without remote sign-out", async () => {
     harness.getSession.mockResolvedValue({ data: { session: null }, error: expired });
@@ -140,5 +145,94 @@ describe("AuthProvider startup restoration", () => {
     await flush();
     expect(harness.states).toEqual([]);
     expect(harness.unsubscribe).toHaveBeenCalledOnce();
+  });
+});
+
+function callbackWindow(hash = "#access_token=test-access&refresh_token=test-refresh&type=signup") {
+  const location = { pathname: "/login", search: "", hash };
+  const replaceState = vi.fn(() => { location.hash = ""; });
+  vi.stubGlobal("window", { location, history: { state: null, replaceState } });
+  return replaceState;
+}
+
+describe("email callback startup", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    harness.states = [];
+    harness.stateIndex = 0;
+    harness.getMyProfile.mockResolvedValue();
+    harness.setSession.mockResolvedValue({ data: { session }, error: null });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("cleans URL and processes callback before profile lookup without restoring an old session", async () => {
+    const replaceState = callbackWindow();
+    start();
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/login");
+    expect(harness.getMyProfile).not.toHaveBeenCalled();
+    await flush();
+    expect(harness.states).toEqual(["checking", "ready"]);
+    expect(harness.getSession).not.toHaveBeenCalled();
+    expect(harness.getMyProfile).toHaveBeenCalledOnce();
+  });
+
+  test("ignores SDK SIGNED_IN while processing the callback", async () => {
+    callbackWindow();
+    harness.setSession.mockImplementation(async () => {
+      await Promise.resolve();
+      harness.listener("SIGNED_IN", session);
+      return { data: { session }, error: null };
+    });
+    start();
+    await flush();
+    expect(harness.getMyProfile).toHaveBeenCalledOnce();
+    expect(harness.states).toEqual(["checking", "ready"]);
+  });
+
+  test("new user must complete profile before entering the app", async () => {
+    callbackWindow();
+    harness.getMyProfile.mockRejectedValue({ status: 409, code: "USER_NOT_SYNCED" });
+    start();
+    await flush();
+    expect(harness.states).toEqual(["checking", "needsProfile"]);
+  });
+
+  test("profile network failure stays an error rather than an empty profile or success", async () => {
+    callbackWindow();
+    harness.getMyProfile.mockRejectedValue(new Error("Network unavailable"));
+    start();
+    await flush();
+    expect(harness.states).toEqual(["checking", "error"]);
+    expect(harness.getMyProfile).toHaveBeenCalledOnce();
+  });
+
+  test("invalid callback opens login without falling back to an unrelated saved session", async () => {
+    callbackWindow("#error=access_denied&error_code=otp_expired");
+    start();
+    await flush();
+    expect(harness.states).toEqual(["signedOut"]);
+    expect(harness.getSession).not.toHaveBeenCalled();
+    expect(harness.getMyProfile).not.toHaveBeenCalled();
+  });
+
+  test("Strict Mode effect replay reuses callback after URL cleanup", async () => {
+    callbackWindow();
+    const cleanup = start();
+    if (cleanup) cleanup();
+    harness.effect();
+    await flush();
+    expect(harness.setSession).toHaveBeenCalledOnce();
+    expect(harness.getMyProfile).toHaveBeenCalledOnce();
+    expect(harness.getSession).not.toHaveBeenCalled();
+    expect(harness.states).toEqual(["checking", "ready"]);
+  });
+
+  test("unmount during callback cannot update auth state", async () => {
+    callbackWindow();
+    const cleanup = start();
+    if (cleanup) cleanup();
+    await flush();
+    expect(harness.states).toEqual([]);
+    expect(harness.getMyProfile).not.toHaveBeenCalled();
   });
 });

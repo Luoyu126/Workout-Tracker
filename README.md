@@ -133,6 +133,17 @@ validates Supabase access tokens using either `SUPABASE_JWT_JWKS_URL` or
 `SUPABASE_JWT_SECRET` from the selected environment file; production startup
 fails if neither JWT verification setting is configured.
 
+### Email confirmation callback deployment
+
+1. In Supabase Authentication, keep **Confirm Email** enabled. In **URL Configuration**, set **Site URL** to `https://workout-tracker-web-d05k.onrender.com/login` and add that exact URL to **Redirect URLs**. Keep the signup template using Supabase's confirmation URL (`{{ .ConfirmationURL }}`), so Supabase verifies the link before redirecting.
+2. Set the Render frontend build environment `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://workout-tracker-web-d05k.onrender.com/login` and rebuild/deploy the web app. This is also the code default. Local overrides must use an allowed URL ending in `/login`; changing the environment requires rebuilding the frontend.
+3. Verify that directly opening and refreshing `/login` serves the Expo web app. For a Render static site with SPA output, configure a **Rewrite** from `/*` to `/index.html` if one is not already configured. Ensure the backend CORS origins include `https://workout-tracker-web-d05k.onrender.com`.
+4. Register a fresh test account: password sign-in must fail before confirmation. Open the newly received email in another browser, verify return to `/login`, URL credential cleanup, profile completion, entry into the app, and session restoration after refresh. Also test an expired link and a temporary profile API failure; neither should enter the app or show an empty profile as success.
+
+Registration shows a persistent instruction to check email. The browser receiving the confirmation establishes its session and reads the business profile; missing profiles require name and optional student ID entry. Native users can return to the app and sign in with their password after confirming. Profile form drafts are not transferred across browsers or devices. A failed redirect does not undo successful email verification. Old emails can still contain the previous localhost redirect; use a new signup email to test the new configuration.
+
+These dashboard settings and the real email delivery flow require separate deployment verification; local tests do not change or verify Supabase/Render settings. See [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
+
 For production or production-like previews, set `APP_ENV=production`. This
 disables FastAPI docs routes and requires `SUPABASE_JWT_SECRET` or
 `SUPABASE_JWT_JWKS_URL` during startup.

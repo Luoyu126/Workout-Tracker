@@ -36,6 +36,8 @@ function isDocumentationPlaceholderValue(value: string | null) {
 }
 
 const configuredSupabaseUrl = nonBlankEnv(process.env.EXPO_PUBLIC_SUPABASE_URL);
+export const emailRedirectTo = nonBlankEnv(process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL)
+  ?? "https://workout-tracker-web-d05k.onrender.com/login";
 const configuredSupabaseAnonKey = nonBlankEnv(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
 const normalizedSupabaseAnonKey = configuredSupabaseAnonKey?.trim().toLowerCase() ?? null;
 const isUsingDevelopmentPlaceholderKey =

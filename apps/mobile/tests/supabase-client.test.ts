@@ -10,6 +10,16 @@ describe("supabase client configuration", () => {
     vi.unstubAllEnvs();
   });
 
+  test("email callback uses hosted login by default and accepts a trimmed build override", async () => {
+    vi.stubEnv("EXPO_PUBLIC_AUTH_REDIRECT_URL", "   ");
+    expect((await import("../src/lib/supabase/config")).emailRedirectTo)
+      .toBe("https://workout-tracker-web-d05k.onrender.com/login");
+    vi.resetModules();
+    vi.stubEnv("EXPO_PUBLIC_AUTH_REDIRECT_URL", " https://preview.example.test/login ");
+    expect((await import("../src/lib/supabase/config")).emailRedirectTo)
+      .toBe("https://preview.example.test/login");
+  });
+
   test("trims configured Supabase URL and anon key", async () => {
     vi.stubEnv("EXPO_PUBLIC_SUPABASE_URL", " https://project.supabase.co ");
     vi.stubEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY", " anon-key ");

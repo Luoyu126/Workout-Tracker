@@ -396,6 +396,13 @@ PATCH /api/v1/users/me
 
 客户端注册、登录、刷新和退出直接使用 Supabase Auth SDK，不由 FastAPI 保存密码。
 
+邮箱注册必须在 Supabase Auth 开启 `Confirm Email`，未验证用户不能通过密码登录。客户端注册通过 SDK 的 `options.emailRedirectTo` 指定 Web `/login` 返回地址；默认值为 `https://workout-tracker-web-d05k.onrender.com/login`，可由构建环境 `EXPO_PUBLIC_AUTH_REDIRECT_URL` 覆盖，并必须加入 Supabase Redirect URLs。
+
+确认链接由 Supabase 验证；Web `/login` 接收现有 implicit flow 的 URL fragment，通过 SDK `setSession` 建立会话并清除 fragment。认证初始化完成后调用 `GET /api/v1/users/me`；`USER_NOT_SYNCED` 转入补资料流程，提交现有 `POST /api/v1/auth/sync`，其余失败沿用既有错误契约。无效回调不得视为验证或登录成功。
+
+上述浏览器回调不新增 FastAPI endpoint，不改变 User schema；邮箱验证状态和凭证继续由 Supabase 管理，业务数据库不保存密码、刷新令牌或额外验证状态。
+
+
 ## 7. 组织、球队与成员 API
 
 ### 7.1 我的组织

@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
 import { supabase } from "@/lib/supabase/client";
+import { emailRedirectTo } from "@/lib/supabase/config";
 import { normalizeOptionalText, omitUndefined } from "@/lib/validation/text";
 
 import { normalizeAuthCredentials } from "./validation";
@@ -40,7 +41,10 @@ export async function signUp(input: SignUpInput) {
   if (normalizedInput === null) {
     throw new AuthValidationError("Email and password are required");
   }
-  const { data, error } = await supabase.auth.signUp(normalizedInput);
+  const { data, error } = await supabase.auth.signUp({
+    ...normalizedInput,
+    options: { emailRedirectTo }
+  });
   if (error) {
     throw error;
   }
