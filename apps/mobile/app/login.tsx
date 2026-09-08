@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAuthWeakPasswordError } from "@supabase/supabase-js";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CompactLanguageToggle } from "@/components/LanguageToggle";
@@ -35,6 +36,7 @@ export default function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [awaitingVerification, setAwaitingVerification] = useState(false);
   const [message, setMessage] = useTransientFeedback(isSubmitting);
+  const [passwordError, setPasswordError] = useTransientFeedback<boolean>(isSubmitting);
   const hasApiConfigProblem = !apiConfig.isConfigured || apiConfig.isMalformed;
   const isCompletingProfile = status === "needsProfile";
   const hasSessionError = status === "error";
@@ -72,6 +74,7 @@ export default function LoginScreen() {
   }
 
   async function handleSignUp() {
+    setPasswordError(null);
     if (!supabaseConfig.isConfigured) {
       setMessage(t("auth.supabaseConfigMissing"));
       return;
@@ -94,7 +97,11 @@ export default function LoginScreen() {
         setMode("signIn");
       }
     } catch (error) {
-      setMessage(formatApiError(error, t));
+      if (isAuthWeakPasswordError(error)) {
+        setPasswordError(true);
+      } else {
+        setMessage(formatApiError(error, t));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -209,14 +216,15 @@ export default function LoginScreen() {
             autoComplete="password"
             autoCorrect={false}
             label={t("auth.password")}
-            onChangeText={setPassword}
+            labelError={mode === "signUp" && passwordError ? t("auth.passwordHint") : undefined}
+            onChangeText={(value) => {
+              setPassword(value);
+              setPasswordError(null);
+            }}
             secureTextEntry
             textContentType="password"
             value={password}
           />
-          {mode === "signUp" ? (
-            <Text style={styles.message}>{t("auth.passwordHint")}</Text>
-          ) : null}
         </>
       ) : null}
 

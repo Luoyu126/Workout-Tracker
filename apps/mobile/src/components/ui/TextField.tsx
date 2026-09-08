@@ -5,12 +5,18 @@ import { radius, spacing, typography } from "@/theme/tokens";
 
 type TextFieldProps = TextInputProps & {
   label?: string;
+  labelError?: string;
 };
 
-export function TextField({ label, style, ...props }: TextFieldProps) {
+export function TextField({ label, labelError, style, ...props }: TextFieldProps) {
   return (
     <View style={styles.wrap}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? (
+        <Text style={styles.label}>
+          {label}
+          {labelError ? <Text accessibilityLiveRegion="polite" style={styles.labelError}> {labelError}</Text> : null}
+        </Text>
+      ) : null}
       <TextInput
         placeholderTextColor={colors.subtle}
         style={[styles.input, props.multiline && styles.multiline, style]}
@@ -27,6 +33,9 @@ const styles = StyleSheet.create({
   label: {
     color: colors.muted,
     ...typography.caption
+  },
+  labelError: {
+    color: colors.danger
   },
   input: {
     backgroundColor: colors.surfaceElevated,
