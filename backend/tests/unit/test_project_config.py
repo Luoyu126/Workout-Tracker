@@ -1050,7 +1050,11 @@ def test_event_completion_rewards_only_current_active_members() -> None:
     requirements = (ROOT_DIR / "requirements.md").read_text(encoding="utf-8")
     tech_stack = (ROOT_DIR / "tech_stack.md").read_text(encoding="utf-8")
     eligibility = (ROOT_DIR / "backend/app/teams/eligibility.py").read_text(encoding="utf-8")
-    complete_body = events_service.split("def complete_event(", maxsplit=1)[1].split(
+    settlement_body = events_service.split("def _complete_locked_event(", maxsplit=1)[1].split(
+        "\n\ndef ",
+        maxsplit=1,
+    )[0]
+    completion_result_body = events_service.split("def _completion_result(", maxsplit=1)[1].split(
         "\n\ndef ",
         maxsplit=1,
     )[0]
@@ -1073,7 +1077,7 @@ def test_event_completion_rewards_only_current_active_members() -> None:
         "issue_signup_reward",
         "_eligible_member_ids_for_event",
     ):
-        assert phrase in complete_body
+        assert phrase in settlement_body + completion_result_body
 
     assert "joined_at <= event.start_time" in api_spec
     assert "当前 active 的 `role=member`" in api_spec
@@ -1081,6 +1085,50 @@ def test_event_completion_rewards_only_current_active_members() -> None:
     assert "无报名记录的队员按 `maybe` 处理；不自动创建 absent 或其他出勤记录" in api_spec
     assert "不维护独立出勤记录，也不自动补 absent" in requirements
     assert "treat missing signup as `maybe`" in tech_stack
+
+
+def test_automatic_event_completion_worker_is_lifespan_managed_and_database_safe() -> None:
+    main_source = (ROOT_DIR / "backend/app/main.py").read_text(encoding="utf-8")
+    worker_source = (ROOT_DIR / "backend/app/events/worker.py").read_text(encoding="utf-8")
+    repository_source = (ROOT_DIR / "backend/app/events/repository.py").read_text(encoding="utf-8")
+    config_source = (ROOT_DIR / "backend/app/config.py").read_text(encoding="utf-8")
+    env_example = (ROOT_DIR / ".env.example").read_text(encoding="utf-8")
+
+    for phrase in (
+        "run_event_completion_worker(settings)",
+        'name="event-completion-worker"',
+        "worker_task.cancel()",
+        "await worker_task",
+        "lifespan=lifespan",
+    ):
+        assert phrase in main_source
+    for phrase in (
+        "run_event_completion_sweep",
+        "complete_due_event",
+        "asyncio.to_thread",
+        "await asyncio.shield(sweep_task)",
+        "await _run_sweep_without_interrupting_transaction(settings)",
+        "await asyncio.sleep(settings.event_completion_poll_seconds)",
+    ):
+        assert phrase in worker_source
+    for phrase in (
+        "Event.end_time <= due_at",
+        "Event.status == EventStatus.published",
+        ".with_for_update(skip_locked=True)",
+    ):
+        assert phrase in repository_source
+    for phrase in (
+        'alias="EVENT_COMPLETION_WORKER_ENABLED"',
+        'alias="EVENT_COMPLETION_POLL_SECONDS"',
+        'alias="EVENT_COMPLETION_BATCH_SIZE"',
+    ):
+        assert phrase in config_source
+    for phrase in (
+        "EVENT_COMPLETION_WORKER_ENABLED=true",
+        "EVENT_COMPLETION_POLL_SECONDS=60",
+        "EVENT_COMPLETION_BATCH_SIZE=100",
+    ):
+        assert phrase in env_example
 
 
 def test_api_spec_documents_idempotent_redemption_compensation() -> None:

@@ -16,6 +16,36 @@ def get_event_for_update(session: Session, event_id: UUID) -> Event | None:
     return session.scalar(select(Event).where(Event.id == event_id).with_for_update())
 
 
+def list_due_event_ids(session: Session, due_at: datetime, limit: int) -> list[UUID]:
+    return list(
+        session.scalars(
+            select(Event.id)
+            .where(
+                Event.status == EventStatus.published,
+                Event.end_time <= due_at,
+            )
+            .order_by(Event.end_time, Event.id)
+            .limit(limit)
+        ).all()
+    )
+
+
+def get_due_event_for_update(
+    session: Session,
+    event_id: UUID,
+    due_at: datetime,
+) -> Event | None:
+    return session.scalar(
+        select(Event)
+        .where(
+            Event.id == event_id,
+            Event.status == EventStatus.published,
+            Event.end_time <= due_at,
+        )
+        .with_for_update(skip_locked=True)
+    )
+
+
 def get_match_details(session: Session, event_id: UUID) -> MatchDetails | None:
     return session.scalar(select(MatchDetails).where(MatchDetails.event_id == event_id))
 

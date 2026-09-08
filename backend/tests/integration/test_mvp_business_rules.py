@@ -74,18 +74,21 @@ def _seed_team(session: Session) -> tuple[Team, User, User, User]:
                 user_id=admin.id,
                 role=MembershipRole.admin,
                 status=MembershipStatus.active,
+                joined_at=datetime.now(UTC) - timedelta(days=30),
             ),
             TeamMembership(
                 team_id=team.id,
                 user_id=player.id,
                 role=MembershipRole.member,
                 status=MembershipStatus.active,
+                joined_at=datetime.now(UTC) - timedelta(days=30),
             ),
             TeamMembership(
                 team_id=team.id,
                 user_id=missing_player.id,
                 role=MembershipRole.member,
                 status=MembershipStatus.active,
+                joined_at=datetime.now(UTC) - timedelta(days=30),
             ),
         ]
     )
@@ -137,8 +140,8 @@ def test_completion_rewards_going_signups_and_treats_missing_as_maybe(
         team_id=team.id,
         type=EventType.training,
         title="周三训练",
-        start_time=datetime.now(UTC) + timedelta(days=1),
-        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(hours=2),
+        end_time=datetime.now(UTC) - timedelta(hours=1),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -178,8 +181,8 @@ def test_signup_reward_uses_configured_coin_rule_amount(session: Session) -> Non
         team_id=team.id,
         type=EventType.training,
         title="自定义金币训练",
-        start_time=datetime.now(UTC) + timedelta(days=1),
-        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(hours=2),
+        end_time=datetime.now(UTC) - timedelta(hours=1),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -210,8 +213,8 @@ def test_match_going_uses_match_signup_rule_instead_of_training_rule(session: Se
         team_id=team.id,
         type=EventType.training,
         title="训练报名奖励",
-        start_time=datetime.now(UTC) + timedelta(days=1),
-        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(days=2),
+        end_time=datetime.now(UTC) - timedelta(days=2) + timedelta(hours=2),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -219,8 +222,8 @@ def test_match_going_uses_match_signup_rule_instead_of_training_rule(session: Se
         team_id=team.id,
         type=EventType.match,
         title="比赛报名奖励",
-        start_time=datetime.now(UTC) + timedelta(days=2),
-        end_time=datetime.now(UTC) + timedelta(days=2) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(days=1),
+        end_time=datetime.now(UTC) - timedelta(days=1) + timedelta(hours=2),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -256,8 +259,8 @@ def test_maybe_and_not_going_do_not_receive_signup_rewards(session: Session) -> 
         team_id=team.id,
         type=EventType.training,
         title="非 going 不发币",
-        start_time=datetime.now(UTC) + timedelta(days=1),
-        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(hours=2),
+        end_time=datetime.now(UTC) - timedelta(hours=1),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -288,8 +291,8 @@ def test_repeating_completed_event_settlement_is_idempotent(session: Session) ->
         team_id=team.id,
         type=EventType.training,
         title="重复完成不重复发币",
-        start_time=datetime.now(UTC) + timedelta(days=1),
-        end_time=datetime.now(UTC) + timedelta(days=1) + timedelta(hours=2),
+        start_time=datetime.now(UTC) - timedelta(hours=2),
+        end_time=datetime.now(UTC) - timedelta(hours=1),
         status=EventStatus.published,
         created_by=admin.id,
     )
@@ -323,7 +326,7 @@ def test_completion_rewards_only_current_active_members_eligible_at_event_start(
 ) -> None:
     team, admin, _, _ = _seed_team(session)
     _add_signup_rules(session, team, admin)
-    event_start = datetime.now(UTC) + timedelta(days=2)
+    event_start = datetime.now(UTC) - timedelta(hours=2)
     former_player = _user("Former Player")
     late_joiner = _user("Late Joiner")
     old_inactive_player = _user("Old Inactive Player")

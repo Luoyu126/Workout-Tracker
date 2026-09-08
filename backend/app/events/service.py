@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.coins.service import issue_signup_reward
+from app.coins.service import active_signup_rule_for_event, issue_signup_reward
 from app.common.enums import EventStatus, EventType, MembershipRole, SignupStatus, enum_value
 from app.common.permissions import PermissionDeniedError
 from app.common.transactions import transaction_boundary
@@ -137,6 +137,26 @@ def _event_matches_create_request(event: Event, team_id: UUID, user: User, paylo
     return event.team_id == team_id and event.created_by == user.id and _event_create_fields_match(event, payload)
 
 
+def _require_active_signup_rule(
+    session: Session,
+    team_id: UUID,
+    event_type: EventType,
+    *,
+    for_update: bool = False,
+) -> int:
+    if event_type == EventType.other:
+        return 0
+    rule = active_signup_rule_for_event(
+        session,
+        team_id,
+        event_type,
+        for_update=for_update,
+    )
+    if rule is None:
+        raise EventStateError(f"An active {enum_value(event_type)} signup coin rule is required")
+    return rule.amount
+
+
 def create_event(session: Session, team_id: UUID, user: User, payload: EventCreateRequest) -> Event:
     with transaction_boundary(session):
         require_team_role(
@@ -155,6 +175,7 @@ def create_event(session: Session, team_id: UUID, user: User, payload: EventCrea
                 raise EventConflictError("Event id already belongs to another request")
             event = existing
         else:
+            _require_active_signup_rule(session, team_id, payload.type)
             event = Event(
                 id=payload.id,
                 team_id=team_id,
@@ -197,6 +218,7 @@ def create_match(session: Session, team_id: UUID, user: User, payload: MatchCrea
                 raise EventConflictError("Event id already belongs to another request")
             event = existing
         else:
+            _require_active_signup_rule(session, team_id, EventType.match)
             event = Event(
                 id=event_payload.id,
                 team_id=team_id,
@@ -369,6 +391,78 @@ def _eligible_member_ids_for_event(
     ]
 
 
+def _completion_result(
+    event: Event,
+    eligible_member_ids: list[UUID],
+    signup_by_user_id: dict[UUID, SignupStatus],
+    *,
+    reward_count: int,
+) -> dict[str, object]:
+    going_count = sum(
+        1
+        for member_id in eligible_member_ids
+        if signup_by_user_id.get(member_id, SignupStatus.maybe) == SignupStatus.going
+    )
+    return {
+        "event_id": event.id,
+        "status": enum_value(event.status),
+        "going_count": going_count,
+        "reward_count": reward_count,
+    }
+
+
+def _complete_locked_event(
+    session: Session,
+    event: Event,
+    *,
+    created_by: UUID | None,
+    payload: EventCompletionRequest | None = None,
+) -> dict[str, object]:
+    member_memberships = team_repository.list_member_memberships_for_update(session, event.team_id)
+    eligible_member_ids = _eligible_member_ids_for_event(session, event, member_memberships)
+    membership_by_user_id = {membership.user_id: membership for membership in member_memberships}
+    signup_by_user_id = {
+        signup.user_id: signup.status for signup in repository.list_event_signups(session, event.id)
+    }
+    if event.status == EventStatus.completed:
+        return _completion_result(
+            event,
+            eligible_member_ids,
+            signup_by_user_id,
+            reward_count=0,
+        )
+    if event.status != EventStatus.published:
+        raise EventStateError("Only published events can be completed")
+
+    reward_amount = _require_active_signup_rule(
+        session,
+        event.team_id,
+        event.type,
+        for_update=True,
+    )
+    _apply_completion_match_details(session, event, payload or EventCompletionRequest())
+    reward_count = 0
+    for member_id in eligible_member_ids:
+        signup_status = signup_by_user_id.get(member_id, SignupStatus.maybe)
+        if issue_signup_reward(
+            session,
+            event,
+            member_id,
+            signup_status,
+            reward_amount,
+            created_by,
+            membership=membership_by_user_id[member_id],
+        ) is not None:
+            reward_count += 1
+    event.status = EventStatus.completed
+    return _completion_result(
+        event,
+        eligible_member_ids,
+        signup_by_user_id,
+        reward_count=reward_count,
+    )
+
+
 def complete_event(
     session: Session,
     event_id: UUID,
@@ -378,53 +472,34 @@ def complete_event(
     with transaction_boundary(session):
         event = _get_event_for_update(session, event_id)
         _require_event_admin(session, event, user, "events.complete_event")
-        member_memberships = team_repository.list_member_memberships(session, event.team_id)
-        eligible_member_ids = _eligible_member_ids_for_event(session, event, member_memberships)
-        membership_by_user_id = {membership.user_id: membership for membership in member_memberships}
-        signup_by_user_id = {
-            signup.user_id: signup.status for signup in repository.list_event_signups(session, event.id)
-        }
+        if event.status == EventStatus.published and _now_for(event.end_time) < event.end_time:
+            raise EventStateError("Event cannot be completed before end_time")
+        return _complete_locked_event(
+            session,
+            event,
+            created_by=user.id,
+            payload=payload,
+        )
 
-        def status_for(member_id: UUID) -> SignupStatus:
-            return signup_by_user_id.get(member_id, SignupStatus.maybe)
 
-        if event.status == EventStatus.completed:
-            going_count = sum(
-                1 for member_id in eligible_member_ids if status_for(member_id) == SignupStatus.going
-            )
-            result = {
-                "event_id": event.id,
-                "status": enum_value(event.status),
-                "going_count": going_count,
-                "reward_count": 0,
-            }
-        else:
-            if event.status != EventStatus.published:
-                raise EventStateError("Only published events can be completed")
-            _apply_completion_match_details(session, event, payload or EventCompletionRequest())
-            reward_count = 0
-            going_count = 0
-            for member_id in eligible_member_ids:
-                signup_status = status_for(member_id)
-                if signup_status == SignupStatus.going:
-                    going_count += 1
-                if issue_signup_reward(
-                    session,
-                    event,
-                    member_id,
-                    signup_status,
-                    user.id,
-                    membership=membership_by_user_id[member_id],
-                ) is not None:
-                    reward_count += 1
-            event.status = EventStatus.completed
-            result = {
-                "event_id": event.id,
-                "status": enum_value(event.status),
-                "going_count": going_count,
-                "reward_count": reward_count,
-            }
-    return result
+def list_due_event_ids(session: Session, due_at: datetime, limit: int) -> list[UUID]:
+    return repository.list_due_event_ids(session, due_at, limit)
+
+
+def complete_due_event(
+    session: Session,
+    event_id: UUID,
+    due_at: datetime,
+) -> dict[str, object] | None:
+    with transaction_boundary(session):
+        event = repository.get_due_event_for_update(session, event_id, due_at)
+        if event is None:
+            return None
+        return _complete_locked_event(
+            session,
+            event,
+            created_by=None,
+        )
 
 
 def get_my_signup(session: Session, event_id: UUID, user: User) -> EventSignup | dict[str, object]:

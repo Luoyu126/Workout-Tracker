@@ -22,6 +22,7 @@ from app.events.router import (
     patch_event,
     post_complete_event,
     post_event,
+    post_match,
     put_my_signup,
     read_event,
     read_signups,
@@ -31,6 +32,8 @@ from app.events.schemas import (
     EventSignupRead,
     EventSignupUpsertRequest,
     EventUpdateRequest,
+    MatchCreateRequest,
+    MatchDetailsCreateRequest,
 )
 from app.main import create_app
 from app.models import (
@@ -91,6 +94,22 @@ def _seed_team(session: Session) -> tuple[Team, User, User]:
                 status=MembershipStatus.active,
                 joined_at=joined_at,
             ),
+            CoinRule(
+                team_id=team.id,
+                name="训练报名",
+                trigger_type="training_signup",
+                amount=10,
+                is_active=True,
+                created_by=admin.id,
+            ),
+            CoinRule(
+                team_id=team.id,
+                name="比赛报名",
+                trigger_type="match_signup",
+                amount=20,
+                is_active=True,
+                created_by=admin.id,
+            ),
         ]
     )
     session.commit()
@@ -117,6 +136,48 @@ def test_event_is_created_published_without_deadline_or_publish_route(session: S
     assert "/api/v1/events/{event_id}/publish" not in create_app().openapi()["paths"]
 
 
+def test_training_and_match_creation_require_corresponding_active_coin_rules(session: Session) -> None:
+    team, admin, _member = _seed_team(session)
+    training_rule = session.scalar(
+        select(CoinRule).where(CoinRule.team_id == team.id, CoinRule.trigger_type == "training_signup")
+    )
+    match_rule = session.scalar(
+        select(CoinRule).where(CoinRule.team_id == team.id, CoinRule.trigger_type == "match_signup")
+    )
+    assert training_rule is not None
+    assert match_rule is not None
+
+    training_rule.is_active = False
+    session.commit()
+    with pytest.raises(HTTPException) as training_error:
+        post_event(team.id, _payload("缺少规则的训练"), admin, session)
+    assert training_error.value.status_code == 409
+    assert training_error.value.detail["code"] == "EVENT_STATE_CONFLICT"
+
+    other_payload = _payload("无需奖励规则的其他活动").model_copy(update={"type": EventType.other})
+    assert post_event(team.id, other_payload, admin, session).type == EventType.other
+
+    match_rule.is_active = False
+    session.commit()
+    match_start = datetime.now(UTC) + timedelta(days=1)
+    with pytest.raises(HTTPException) as match_error:
+        post_match(
+            team.id,
+            MatchCreateRequest(
+                event=EventCreateRequest(
+                    title="缺少规则的比赛",
+                    start_time=match_start,
+                    end_time=match_start + timedelta(hours=2),
+                ),
+                match_details=MatchDetailsCreateRequest(opponent="对手"),
+            ),
+            admin,
+            session,
+        )
+    assert match_error.value.status_code == 409
+    assert match_error.value.detail["code"] == "EVENT_STATE_CONFLICT"
+
+
 def test_only_admin_can_create_or_edit_events(session: Session) -> None:
     team, admin, member = _seed_team(session)
     with pytest.raises(HTTPException) as create_error:
@@ -129,7 +190,7 @@ def test_only_admin_can_create_or_edit_events(session: Session) -> None:
     assert update_error.value.status_code == 403
 
 
-def test_member_signup_uses_start_time_as_cutoff_and_admin_is_rejected(session: Session) -> None:
+def test_member_signup_uses_end_time_as_cutoff_and_admin_is_rejected(session: Session) -> None:
     team, admin, member = _seed_team(session)
     event = post_event(team.id, _payload(), admin, session)
     signup = put_my_signup(
@@ -168,6 +229,40 @@ def test_member_signup_uses_start_time_as_cutoff_and_admin_is_rejected(session: 
             session,
         )
     assert cutoff_error.value.status_code == 409
+
+
+
+@pytest.mark.parametrize("seconds_before_end", [1, 0, -1])
+@pytest.mark.parametrize("existing_signup", [False, True])
+def test_signup_end_boundary_after_start(
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds_before_end: int,
+    existing_signup: bool,
+) -> None:
+    team, admin, member = _seed_team(session)
+    event = post_event(team.id, _payload(), admin, session)
+    if existing_signup:
+        put_my_signup(
+            event.id, EventSignupUpsertRequest(status=SignupStatus.maybe), member, session
+        )
+    now = datetime.now(UTC)
+    event.start_time = now - timedelta(hours=1)
+    event.end_time = now + timedelta(seconds=seconds_before_end)
+    session.commit()
+    monkeypatch.setattr(
+        "app.events.service._now_for",
+        lambda value: now if value.tzinfo else now.replace(tzinfo=None),
+    )
+    payload = EventSignupUpsertRequest(status=SignupStatus.going)
+    if seconds_before_end > 0:
+        signup = put_my_signup(event.id, payload, member, session)
+        session.expire_all()
+        assert session.get(type(signup), signup.id).status == SignupStatus.going
+    else:
+        with pytest.raises(HTTPException) as error:
+            put_my_signup(event.id, payload, member, session)
+        assert error.value.status_code == 409
 
 
 def test_event_notification_is_updated_in_place_and_deleted_with_event(session: Session) -> None:
@@ -239,17 +334,6 @@ def test_event_notifications_exclude_admin_inactive_and_not_yet_joined_members(
 
 def test_completed_events_are_immutable_and_completion_is_idempotent(session: Session) -> None:
     team, admin, member = _seed_team(session)
-    session.add(
-        CoinRule(
-            team_id=team.id,
-            name="训练报名",
-            trigger_type="training_signup",
-            amount=10,
-            is_active=True,
-            created_by=admin.id,
-        )
-    )
-    session.commit()
     event = post_event(team.id, _payload(), admin, session)
     put_my_signup(
         event.id,
@@ -257,6 +341,15 @@ def test_completed_events_are_immutable_and_completion_is_idempotent(session: Se
         member,
         session,
     )
+
+    with pytest.raises(HTTPException) as early_completion_error:
+        post_complete_event(event.id, admin, session)
+    assert early_completion_error.value.status_code == 409
+    assert early_completion_error.value.detail["code"] == "EVENT_STATE_CONFLICT"
+
+    event.start_time = datetime.now(UTC) - timedelta(hours=2)
+    event.end_time = datetime.now(UTC) - timedelta(hours=1)
+    session.commit()
 
     first = post_complete_event(event.id, admin, session)
     second = post_complete_event(event.id, admin, session)
@@ -270,39 +363,6 @@ def test_completed_events_are_immutable_and_completion_is_idempotent(session: Se
     with pytest.raises(HTTPException) as delete_error:
         delete_event_route(event.id, admin, session)
     assert delete_error.value.status_code == 409
-
-
-@pytest.mark.parametrize("seconds_before_end", [1, 0, -1])
-@pytest.mark.parametrize("existing_signup", [False, True])
-def test_signup_end_boundary_after_start(
-    session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    seconds_before_end: int,
-    existing_signup: bool,
-) -> None:
-    team, admin, member = _seed_team(session)
-    event = post_event(team.id, _payload(), admin, session)
-    if existing_signup:
-        put_my_signup(
-            event.id, EventSignupUpsertRequest(status=SignupStatus.maybe), member, session
-        )
-    now = datetime.now(UTC)
-    event.start_time = now - timedelta(hours=1)
-    event.end_time = now + timedelta(seconds=seconds_before_end)
-    session.commit()
-    monkeypatch.setattr(
-        "app.events.service._now_for",
-        lambda value: now if value.tzinfo else now.replace(tzinfo=None),
-    )
-    payload = EventSignupUpsertRequest(status=SignupStatus.going)
-    if seconds_before_end > 0:
-        signup = put_my_signup(event.id, payload, member, session)
-        session.expire_all()
-        assert session.get(type(signup), signup.id).status == SignupStatus.going
-    else:
-        with pytest.raises(HTTPException) as error:
-            put_my_signup(event.id, payload, member, session)
-        assert error.value.status_code == 409
 
 
 @pytest.mark.parametrize("event_status", [EventStatus.published, EventStatus.completed])

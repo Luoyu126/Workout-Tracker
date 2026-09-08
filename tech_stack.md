@@ -173,20 +173,23 @@ substitutions.
 
 ### 6.1 Event completion
 
-Completing an event must run in one database transaction:
+FastAPI starts an in-process completion worker during application lifespan. The worker runs once at startup and then every 60 seconds by default, selecting published events whose end_time is at or before the current UTC time. Multiple application instances may run workers because each event is rechecked under `FOR UPDATE SKIP LOCKED` and signup rewards retain their database uniqueness guard.
+
+Completing one due event must run in its own database transaction:
 
 1. Lock the event row.
-2. Verify the event is published.
-3. Resolve eligible player members at `event.start_time`: role is `member`, `joined_at <= event.start_time`, and either still active or `left_at >= event.start_time`.
-4. Apply optional final match details for match events.
-5. For each eligible player member, treat missing signup as `maybe`; for `going` signups, insert missing `signup_reward` CoinTransaction rows according to active team CoinRule settings (`training_signup` or `match_signup`).
-6. Insert coin_earned notifications for newly issued rewards.
-7. Set the event to completed.
-8. Commit.
+2. Recheck that the event is published and `end_time <= now`.
+3. Lock and resolve eligible player memberships: role is `member`, status is currently `active`, and `joined_at <= event.start_time`.
+4. Lock the single active CoinRule for the event type; a missing training or match rule rolls back the event for a later retry. An active zero-amount rule is valid.
+5. Apply optional final match details for a manual fallback request; automatic match completion permits nullable final score fields.
+6. For each eligible player member, treat missing signup as `maybe`; for `going` signups, insert missing `signup_reward` CoinTransaction rows using the one locked rule amount.
+7. Insert coin_earned notifications for newly issued rewards.
+8. Set the event to completed.
+9. Commit, then attempt queued remote push delivery.
 
-The completion response includes `going_count` (eligible player members with signup status `going`) and `reward_count` (newly written reward rows). Repeated completion requests return the already completed result with `reward_count` 0 and must not issue duplicate rewards. Enforce one signup reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
+Automatic rewards use `created_by=NULL`. The retained admin completion endpoint is a post-deadline recovery path and records the admin as actor. It rejects published events before end_time. The completion response includes `going_count` (eligible player members with signup status `going`) and `reward_count` (newly written reward rows). Repeated completion requests return the already completed result with `reward_count` 0 and must not issue duplicate rewards. Enforce one signup reward per (team_id, user_id, event reference) with a unique partial index over existing CoinTransaction columns.
 
-There is no Attendance upsert or post-completion attendance correction path. Admins complete events to settle signup rewards; coin clawback for rewards is not driven by attendance edits.
+There is no Attendance upsert or post-completion attendance correction path. The worker automatically completes due events to settle signup rewards; coin clawback for rewards is not driven by attendance edits.
 
 ### 6.2 Redemption
 

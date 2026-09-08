@@ -221,6 +221,25 @@ EXPO_PUSH_ENDPOINT=https://exp.host/--/api/v2/push/send
 EXPO_PUSH_TIMEOUT_SECONDS=5
 ```
 
+### Automatic event completion
+
+The FastAPI lifespan starts an in-process worker that immediately catches up
+overdue published events and then scans every 60 seconds. Each event completes
+in its own transaction; PostgreSQL row locks and the signup-reward unique index
+make concurrent workers safe. Configure it with:
+
+```bash
+EVENT_COMPLETION_WORKER_ENABLED=true
+EVENT_COMPLETION_POLL_SECONDS=60
+EVENT_COMPLETION_BATCH_SIZE=100
+```
+
+Training and match events require their corresponding active signup coin rule
+when created and again when settled. If a rule is missing at settlement, that
+event remains published and is retried on the next sweep. Set
+`EVENT_COMPLETION_WORKER_ENABLED=false` only for processes that must not run the
+worker; at least one deployed API instance must keep it enabled.
+
 ### Backend container image
 
 `backend/Dockerfile` builds a production-style FastAPI image. Build it from the

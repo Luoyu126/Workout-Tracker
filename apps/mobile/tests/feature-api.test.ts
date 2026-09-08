@@ -258,42 +258,17 @@ describe("feature API contracts", () => {
     });
   });
 
-  test("event completion and signup board APIs call expected endpoints", async () => {
-    const { completeEvent } = await import("../src/features/events/api");
+  test("signup board API calls the expected filtered endpoint", async () => {
     const { getTeamSignupBoard } = await import("../src/features/teams/api");
 
     getTeamSignupBoard("team-1", {
       startsAfter: "2026-08-01T00:00:00.000Z",
       startsBefore: "2026-08-31T23:59:59.000Z"
     });
-    completeEvent("event-1");
-    completeEvent("event-1", {
-      match_details: {
-        team_score: 2,
-        opponent_score: 1,
-        result: "win",
-        notes: "  终场确认  "
-      }
-    });
-
     expect(apiRequestMock).toHaveBeenNthCalledWith(
       1,
       "/api/v1/teams/team-1/signup-board?starts_after=2026-08-01T00%3A00%3A00.000Z&starts_before=2026-08-31T23%3A59%3A59.000Z"
     );
-    expect(apiRequestMock).toHaveBeenNthCalledWith(2, "/api/v1/events/event-1/complete", {
-      method: "POST"
-    });
-    expect(apiRequestMock).toHaveBeenNthCalledWith(3, "/api/v1/events/event-1/complete", {
-      method: "POST",
-      body: {
-        match_details: {
-          team_score: 2,
-          opponent_score: 1,
-          result: "win",
-          notes: "终场确认"
-        }
-      }
-    });
   });
 
   test("signup board serializes multiple event types", async () => {

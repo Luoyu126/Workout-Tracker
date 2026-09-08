@@ -115,6 +115,19 @@ def list_member_memberships(session: Session, team_id: UUID) -> list[TeamMembers
     )
 
 
+def list_member_memberships_for_update(session: Session, team_id: UUID) -> list[TeamMembership]:
+    return list(
+        session.scalars(
+            select(TeamMembership)
+            .where(
+                TeamMembership.team_id == team_id,
+                TeamMembership.role == MembershipRole.member,
+            )
+            .with_for_update()
+        ).all()
+    )
+
+
 def list_active_user_ids(session: Session, team_id: UUID) -> list[UUID]:
     return list(
         session.scalars(

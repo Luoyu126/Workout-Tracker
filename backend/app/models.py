@@ -132,6 +132,7 @@ class Event(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("status IN ('published', 'completed')", name="ck_events_status"),
         CheckConstraint("end_time > start_time", name="ck_events_end_after_start"),
+        Index("ix_events_status_end_time", "status", "end_time"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

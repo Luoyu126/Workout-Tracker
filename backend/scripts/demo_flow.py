@@ -198,6 +198,16 @@ def run_demo_flow() -> dict[str, object]:
             player,
             EventSignupUpsertRequest(status=SignupStatus.going),
         )
+        match_started_at = datetime.now(UTC) - timedelta(hours=2)
+        update_event(
+            session,
+            match.id,
+            admin,
+            EventUpdateRequest(
+                start_time=match_started_at,
+                end_time=match_started_at + timedelta(hours=1),
+            ),
+        )
         create_match_log(
             session,
             match.id,
@@ -252,6 +262,16 @@ def run_demo_flow() -> dict[str, object]:
             event.id,
             player,
             EventSignupUpsertRequest(status=SignupStatus.going),
+        )
+        event_started_at = datetime.now(UTC) - timedelta(hours=2)
+        update_event(
+            session,
+            event.id,
+            admin,
+            EventUpdateRequest(
+                start_time=event_started_at,
+                end_time=event_started_at + timedelta(hours=1),
+            ),
         )
         completion = complete_event(session, event.id, admin)
         assert completion["going_count"] == 1

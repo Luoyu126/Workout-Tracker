@@ -38,6 +38,21 @@ class Settings(BaseSettings):
         alias="EXPO_PUSH_ENDPOINT",
     )
     expo_push_timeout_seconds: float = Field(default=5.0, alias="EXPO_PUSH_TIMEOUT_SECONDS")
+    event_completion_worker_enabled: bool = Field(
+        default=True,
+        alias="EVENT_COMPLETION_WORKER_ENABLED",
+    )
+    event_completion_poll_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        alias="EVENT_COMPLETION_POLL_SECONDS",
+    )
+    event_completion_batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        alias="EVENT_COMPLETION_BATCH_SIZE",
+    )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_dir: str = Field(default="backend/logs", alias="LOG_DIR")
     log_max_bytes: int = Field(default=10_485_760, alias="LOG_MAX_BYTES")

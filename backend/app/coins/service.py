@@ -50,16 +50,28 @@ def _ensure_active_signup_rule_available(
         raise CoinRuleConflictError(f"An active {trigger_type.value} rule already exists")
 
 
-def reward_amount_for_signup(session: Session, event: Event, signup_status: SignupStatus) -> int:
-    trigger_type: CoinRuleTrigger | None = None
-    if signup_status == SignupStatus.going and event.type == EventType.training:
-        trigger_type = CoinRuleTrigger.training_signup
-    elif signup_status == SignupStatus.going and event.type == EventType.match:
-        trigger_type = CoinRuleTrigger.match_signup
+def active_signup_rule_for_event(
+    session: Session,
+    team_id: UUID,
+    event_type: EventType,
+    *,
+    for_update: bool = False,
+) -> CoinRule | None:
+    trigger_type = (
+        CoinRuleTrigger.training_signup
+        if event_type == EventType.training
+        else CoinRuleTrigger.match_signup
+        if event_type == EventType.match
+        else None
+    )
     if trigger_type is None:
-        return 0
-    rule = repository.find_active_rule(session, event.team_id, trigger_type)
-    return rule.amount if rule is not None else 0
+        return None
+    return repository.find_active_rule(
+        session,
+        team_id,
+        trigger_type,
+        for_update=for_update,
+    )
 
 
 def _coin_permission(session: Session, team_id: UUID, user_id: UUID) -> None:
@@ -249,7 +261,8 @@ def issue_signup_reward(
     event: Event,
     user_id: UUID,
     signup_status: SignupStatus,
-    created_by: UUID,
+    reward_amount: int,
+    created_by: UUID | None,
     *,
     membership: TeamMembership | None = None,
 ) -> CoinTransaction | None:
@@ -261,16 +274,15 @@ def issue_signup_reward(
         membership = team_repository.find_membership(session, event.team_id, user_id)
     if membership is None or not is_membership_eligible_for_event(membership, event):
         return None
-    amount = reward_amount_for_signup(session, event, signup_status)
-    if amount == 0:
+    if reward_amount == 0:
         return None
     existing = repository.find_signup_reward_transaction(session, event.team_id, user_id, event.id)
     if existing is not None:
-        return existing
+        return None
     transaction = CoinTransaction(
         team_id=event.team_id,
         user_id=user_id,
-        amount=amount,
+        amount=reward_amount,
         type=CoinTransactionType.signup_reward,
         reason=f"Signup reward for {event.title}",
         reference_type="event",
@@ -286,7 +298,7 @@ def issue_signup_reward(
         event.team_id,
         NotificationType.coin_earned,
         title="金币已到账",
-        body=f"{event.title} 报名奖励 {amount} 金币。",
+        body=f"{event.title} 报名奖励 {reward_amount} 金币。",
         reference_type="coin_transaction",
         reference_id=transaction.id,
     )

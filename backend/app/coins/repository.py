@@ -18,6 +18,7 @@ def find_active_rule(
     trigger_type: CoinRuleTrigger,
     *,
     exclude_rule_id: UUID | None = None,
+    for_update: bool = False,
 ) -> CoinRule | None:
     stmt = select(CoinRule).where(
         CoinRule.team_id == team_id,
@@ -26,7 +27,10 @@ def find_active_rule(
     )
     if exclude_rule_id is not None:
         stmt = stmt.where(CoinRule.id != exclude_rule_id)
-    return session.scalar(stmt.order_by(CoinRule.updated_at.desc(), CoinRule.created_at.desc()).limit(1))
+    stmt = stmt.order_by(CoinRule.updated_at.desc(), CoinRule.created_at.desc()).limit(1)
+    if for_update:
+        stmt = stmt.with_for_update()
+    return session.scalar(stmt)
 
 
 def list_rules(session: Session, team_id: UUID) -> list[CoinRule]:

@@ -99,7 +99,7 @@ MVP 使用 FastAPI 标准错误响应，业务错误在 `detail` 中返回结构
 User 不保存全局业务角色。球队权限来自有效的 TeamMembership：
 
 - member：队员账号，读取球队内容、维护自己的报名、只读查看比赛实时看板、兑换商品。
-- admin：球队管理员账号，管理当前球队、成员、活动、完成活动结算、比赛实时记录、金币规则、商品和兑换履约。
+- admin：球队管理员账号，管理当前球队、成员、活动、查看自动完成结果、比赛实时记录、金币规则、商品和兑换履约。
 
 `admin` 和 `member` 是分立的业务账号逻辑。只有 `member` 可以报名训练/比赛、进入报名榜统计并获得活动报名奖励；`admin` 账号不能报名、不能被统计，也不能获得活动报名奖励。真实球队队长如需参与训练/比赛，应使用 `member` 逻辑。
 
@@ -534,7 +534,7 @@ admin 可更新 role、status、jersey_number、player_name 和 left_at。更新
 
 POST /api/v1/teams/{team_id}/events
 
-仅 admin 可用。客户端可生成 UUID `id` 并随请求提交。创建后状态固定为 published，created_by 取当前用户。创建成功后仅为当时已加入且仍 active 的 role=member 队员创建一条以活动为引用的 new_event Notification；不通知 admin、已离队或尚未入队的用户。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 Event，不重复创建活动或通知；相同 `id` 被不同请求复用时返回 409。type=match 必须使用创建比赛接口。
+仅 admin 可用。创建 training 前必须已有 active `training_signup` CoinRule；other 不要求报名奖励规则。客户端可生成 UUID `id` 并随请求提交。创建后状态固定为 published，created_by 取当前用户。创建成功后仅为当时已加入且仍 active 的 role=member 队员创建一条以活动为引用的 new_event Notification；不通知 admin、已离队或尚未入队的用户。重复提交相同 `id` 且 team、created_by 和 payload 完全一致时，后端幂等返回已有 Event，不重复创建活动或通知；相同 `id` 被不同请求复用时返回 409。type=match 必须使用创建比赛接口。
 
 ~~~json
 {
@@ -552,7 +552,7 @@ POST /api/v1/teams/{team_id}/events
 
 POST /api/v1/teams/{team_id}/matches
 
-在同一事务中创建 Event(type=match, status=published) 和 MatchDetails。通知资格和幂等规则与创建普通活动一致。客户端可在嵌套 `event` 中生成 UUID `id`；相同 `event.id` 被不同请求复用时返回 409。
+在同一事务中创建 Event(type=match, status=published) 和 MatchDetails。创建前必须已有 active `match_signup` CoinRule。通知资格和幂等规则与创建普通活动一致。客户端可在嵌套 `event` 中生成 UUID `id`；相同 `event.id` 被不同请求复用时返回 409。
 
 ~~~json
 {
@@ -604,11 +604,24 @@ DELETE /api/v1/events/{event_id}
 
 仅 admin 可用。仅 published 可删除；completed 不可删除。删除前后端锁定 Event 行，删除对应的 new_event Notification，再物理删除 Event 以及 EventSignup、MatchDetails、MatchLogEntry 等从属记录。
 
-### 8.7 完成活动
+### 8.7 完成活动：自动结算与补偿接口
+
+FastAPI 内置 worker 启动后立即扫描，此后默认每 60 秒扫描一次满足
+`status=published` 且 `end_time <= 当前 UTC 时间` 的活动。每个活动在独立事务中锁定并完成：
+
+- 按活动开始时已有资格且结算时仍为 active 的 `role=member` 队员计算报名结果。
+- 无报名记录按 `maybe` 处理；仅 `going` 使用本次事务锁定的 active CoinRule 发放奖励。
+- 自动生成的 `signup_reward.created_by` 为 null。
+- 活动状态、全部奖励流水与 `coin_earned` Notification 原子提交；Push 在提交后尽力投递。
+- 缺少对应 active CoinRule 时回滚该活动并保持 published，下一轮继续重试。
+- match 的最终比分和结果允许为空，不阻止自动完成。
+
+以下接口保留为管理员在活动到期后的补偿性重试入口，不作为日常确认流程：
 
 POST /api/v1/events/{event_id}/complete
 
-仅 admin 可用。仅允许 published → completed。比赛活动的请求可包含最终比赛数据；训练或其他活动不得提交 match_details。
+仅 admin 可用。活动尚未到达 end_time 时返回 409 `EVENT_STATE_CONFLICT`。到期后仅允许
+published → completed；比赛活动的请求可包含最终比赛数据，训练或其他活动不得提交 match_details。
 
 ~~~json
 {
@@ -621,7 +634,7 @@ POST /api/v1/events/{event_id}/complete
 }
 ~~~
 
-完成动作在一个事务中锁定 Event，按活动开始时有资格参与的队员范围结算报名奖励，再更新 Event.status。有效队员必须是当前 active 的 `role=member`，且 `joined_at <= event.start_time`。无报名记录的队员按 `maybe` 处理；不自动创建 absent 或其他出勤记录。
+补偿完成动作复用自动 worker 的同一结算逻辑，在一个事务中锁定 Event、相关成员关系和适用的 CoinRule，再更新 Event.status。有效队员必须是当前 active 的 `role=member`，且 `joined_at <= event.start_time`。无报名记录的队员按 `maybe` 处理；不自动创建 absent 或其他出勤记录。
 
 对每位有效队员，若其报名状态为 `going`，则按球队有效 CoinRule（训练用 `training_signup`，比赛用 `match_signup`）生成缺失的 `signup_reward` CoinTransaction 和 `coin_earned` Notification。`maybe` / `not_going` 不发币；admin 不参与结算。
 
@@ -639,7 +652,8 @@ POST /api/v1/events/{event_id}/complete
 - `going_count`：有效队员中报名状态为 `going` 的人数。
 - `reward_count`：本次新写入的 `signup_reward` 流水条数。
 
-重复调用已 completed 的活动时返回现有结果（`reward_count` 为 0），不重复发币。
+重复调用已 completed 的活动时返回现有结果（`reward_count` 为 0），不重复发币。多个 worker
+或补偿请求并发处理同一活动时，通过 Event 行锁和奖励唯一索引保证只完成和发奖一次。
 
 ## 9. 报名 API
 

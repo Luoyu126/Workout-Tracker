@@ -574,13 +574,8 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain('event?.type === "match" && eventId ? (');
     expect(source).toContain('pathname: "/events/[eventId]/summary"');
     expect(source).toContain('pathname: "/events/[eventId]/live"');
-    expect(source).toContain("completeEvent");
-    expect(source).toContain("events.completeConfirmTitle");
-    expect(source).toContain("events.goingCount");
-    expect(source).toContain("events.rewardCount");
-    expect(source).toContain("completion.going_count");
-    expect(source).toContain("completion.reward_count");
-    expect(source).toContain("canCompleteEvent");
+    expect(source).not.toContain("completeEvent");
+    expect(source).not.toContain("canCompleteEvent");
   });
 
   test("event creation has a dedicated route shared by both activity lists", () => {
@@ -935,34 +930,23 @@ describe("mobile MVP smoke", () => {
     expect(teamHomeSource).not.toContain("/teams/[teamId]/signup-board");
   });
 
-  test("event detail route can complete published events with signup rewards", () => {
+  test("event detail route relies on automatic completion while keeping match result editing", () => {
     const source = readFileSync(resolve(appRoot, "app/(app)/events/[eventId].tsx"), "utf-8");
 
-    expect(source).toContain("completeEvent");
     expect(source).toContain("canManageEventRole");
-    expect(source).toContain("canCompleteEvent");
-    expect(source).toContain('canManageEventRole && event?.status === "published"');
     expect(source).toContain("Alert.alert");
-    expect(source).toContain("events.completeConfirmTitle");
-    expect(source).toContain("events.completeConfirmBody");
-    expect(source).toContain("events.completeConfirmAction");
-    expect(source).toContain("common.cancel");
-    expect(source).toContain("performCompleteEvent");
-    expect(functionBody(source, "performCompleteEvent")).toContain("if (!canManageEventRole)");
-    expect(functionBody(source, "performCompleteEvent")).toContain('if (event?.status !== "published")');
-    expect(functionBody(source, "performCompleteEvent")).toContain("await completeEvent(");
-    expect(source).toContain("events.goingCount");
-    expect(source).toContain("events.rewardCount");
-    expect(source).toContain("completion.going_count");
-    expect(source).toContain("completion.reward_count");
+    expect(source).not.toContain("completeEvent");
+    expect(source).not.toContain("canCompleteEvent");
+    expect(source).not.toContain("performCompleteEvent");
+    expect(source).not.toContain("events.completeConfirmTitle");
     expect(source).toContain("isValidMatchScoreResult");
     expect(source).toContain("parseOptionalNonNegativeInteger");
     expect(source).toContain('event.type === "match"');
-    expect(source).toContain("match_details: {");
-    expect(source).toContain("team_score: teamScore");
-    expect(source).toContain("opponent_score: opponentScore");
-    expect(source).toContain("result: editMatchResult");
     expect(source).toContain("events.invalidMatchScoreResult");
+    expect(functionBody(source, "handleUpdateEvent")).toContain("match_details: {");
+    expect(functionBody(source, "handleUpdateEvent")).toContain("team_score: teamScore");
+    expect(functionBody(source, "handleUpdateEvent")).toContain("opponent_score: opponentScore");
+    expect(functionBody(source, "handleUpdateEvent")).toContain("result: editMatchResult");
     expect(source).toContain('pathname: "/events/[eventId]/summary"');
     expect(source).toContain('pathname: "/events/[eventId]/live"');
   });

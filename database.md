@@ -317,6 +317,7 @@ completed
 * 活动到达 `end_time` 后，由后端定时任务或等效机制自动将状态转为 `completed`，并在同一结算流程中自动处理报名奖励和完成通知，不需要管理员确认。
 * 只有 `published` 活动可以物理删除。`completed` 活动不可变，并且必须保留，因为金币流水可能引用它。
 * 创建活动时使用客户端提供的 UUID `id` 作为幂等键。使用同一个 ID 且内容一致时返回已有活动；使用同一个 ID 但内容不一致时视为冲突。
+* 为自动完成扫描建立 `(status, end_time)` 复合索引。后台 worker 默认每 60 秒查询一次已到达 `end_time` 的 `published` 活动，并在处理前使用行锁重新校验。
 
 ---
 
@@ -626,6 +627,8 @@ UNIQUE(team_id, user_id, reference_id)
 
 * 自动 `signup_reward` 只发给符合以下条件的 `active` `member`：在 `Event.start_time` 前已经 `active`、完成结算时仍然 `active`，并且 `EventSignup.status=going`。管理员永远不会获得该奖励。
 * 活动自动完成、创建所有符合条件的奖励流水、创建对应通知，必须在一个幂等数据库事务中完成。
+* 自动完成创建的报名奖励 `created_by` 为空；管理员通过到期后的补偿接口重试时记录管理员身份。
+* 结算事务只锁定并读取一次当前 active CoinRule，确保同一活动的所有获奖队员使用相同金额；对应规则缺失时整个活动回滚并等待重试。
 * `redemption` 金额必须为负数。`refund`、`signup_reward` 和 `other_reward` 金额必须为非负数。`admin_adjustment` 可以为正数或负数，也可以让结果余额变为负数。
 * 奖励和调整目标必须使用 `role=member` 的球队成员关系；退款可以在原兑换用户的成员关系变为 `inactive` 后继续退回给该用户。球队管理员不通过成员流程获得或兑换球队金币。
 * 自动结算时 `created_by` 为空；手动调整、其他手动奖励、兑换履约补偿、取消或退款等动作中，`created_by` 存储执行操作的 `active` 球队管理员。

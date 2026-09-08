@@ -5,7 +5,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { ScreenState } from "@/components/ScreenState";
 import {
-  completeEvent,
   deleteEvent,
   getEvent,
   getMySignup,
@@ -147,7 +146,6 @@ export default function EventDetailScreen() {
   const canManageEventStatus = event?.status === "published";
   const canManageEventRole = currentRole === "admin";
   const canManageEvent = canManageEventStatus && canManageEventRole;
-  const canCompleteEvent = canManageEventRole && event?.status === "published";
 
   async function handleSubmitSignup() {
     if (!eventId) {
@@ -302,73 +300,6 @@ export default function EventDetailScreen() {
     ]);
   }
 
-  async function performCompleteEvent() {
-    if (!eventId) {
-      return;
-    }
-    if (!canManageEventRole) {
-      showError(t("events.captainOnlyHint"));
-      return;
-    }
-    if (event?.status !== "published") {
-      showError(t("events.manageReadonly"));
-      return;
-    }
-
-    const teamScore = parseOptionalNonNegativeInteger(editTeamScore);
-    const opponentScore = parseOptionalNonNegativeInteger(editOpponentScore);
-    if (
-      event.type === "match" &&
-      ((editTeamScore.trim().length > 0 && teamScore === null) ||
-        (editOpponentScore.trim().length > 0 && opponentScore === null) ||
-        !isValidMatchScoreResult(teamScore, opponentScore, editMatchResult))
-    ) {
-      showError(t("events.invalidMatchScoreResult"));
-      return;
-    }
-
-    setIsLoading(true);
-    clearMessage();
-    try {
-      const completion = await completeEvent(
-        eventId,
-        event.type === "match"
-          ? {
-              match_details: {
-                team_score: teamScore,
-                opponent_score: opponentScore,
-                result: editMatchResult,
-                notes: editMatchNotes.trim().length > 0 ? editMatchNotes.trim() : null
-              }
-            }
-          : {}
-      );
-      await refreshEventSilently();
-      showSuccess(
-        `${t("events.completed")} · ${t("events.goingCount")} ${completion.going_count} · ${t("events.rewardCount")} ${completion.reward_count}`
-      );
-    } catch (error) {
-      showError(formatApiError(error, t));
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function handleCompleteEvent() {
-    if (!canManageEventRole) {
-      showError(t("events.captainOnlyHint"));
-      return;
-    }
-    if (event?.status !== "published") {
-      showError(t("events.manageReadonly"));
-      return;
-    }
-    Alert.alert(t("events.completeConfirmTitle"), t("events.completeConfirmBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("events.completeConfirmAction"), style: "destructive", onPress: () => void performCompleteEvent() }
-    ]);
-  }
-
   return (
     <>
       <Stack.Screen options={{ title: event?.title ?? t("events.detail") }} />
@@ -504,16 +435,6 @@ export default function EventDetailScreen() {
             >
               <Text style={styles.secondaryText}>{t("events.update")}</Text>
             </Pressable>
-            {canCompleteEvent ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={isLoading}
-                onPress={handleCompleteEvent}
-                style={[styles.secondaryButton, isLoading && styles.disabled]}
-              >
-                <Text style={styles.secondaryText}>{t("events.complete")}</Text>
-              </Pressable>
-            ) : null}
             <Pressable
               accessibilityRole="button"
               disabled={isLoading}

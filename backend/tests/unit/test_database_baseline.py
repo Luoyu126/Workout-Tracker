@@ -22,6 +22,9 @@ ALIGNMENT_MIGRATION = (
 TEAM_SEARCH_MIGRATION = (
     ROOT_DIR / "backend/migrations/versions/20260902_0005_add_team_name_search_index.py"
 )
+DUE_EVENT_INDEX_MIGRATION = (
+    ROOT_DIR / "backend/migrations/versions/20260902_0006_add_due_event_index.py"
+)
 
 EXPECTED_TABLE_COLUMNS = {
     "users": {
@@ -602,6 +605,13 @@ def test_database_baseline_locks_coin_transaction_partial_index_predicates() -> 
     )
 
 
+def test_events_have_status_end_time_index_for_due_completion_scans() -> None:
+    events = Base.metadata.tables["events"]
+    index = next(index for index in events.indexes if index.name == "ix_events_status_end_time")
+
+    assert [column.name for column in index.columns] == ["status", "end_time"]
+
+
 def test_initial_migration_preserves_database_baseline_guards() -> None:
     migration_source = INITIAL_MIGRATION.read_text(encoding="utf-8")
 
@@ -702,5 +712,17 @@ def test_team_search_migration_adds_postgresql_trigram_index() -> None:
         '"ix_teams_name_trgm"',
         'postgresql_using="gin"',
         'postgresql_ops={"name": "gin_trgm_ops"}',
+    ):
+        assert phrase in migration_source
+
+
+def test_due_event_migration_adds_status_end_time_index() -> None:
+    migration_source = DUE_EVENT_INDEX_MIGRATION.read_text(encoding="utf-8")
+
+    for phrase in (
+        'revision: str = "20260902_0006"',
+        'down_revision: str | None = "20260902_0005"',
+        '"ix_events_status_end_time"',
+        '["status", "end_time"]',
     ):
         assert phrase in migration_source
