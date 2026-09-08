@@ -143,7 +143,7 @@ export default function LoginScreen() {
   return (
     <Screen scroll contentStyle={styles.content}>
       <View style={styles.brandRow}>
-        <Text style={styles.brand}>⚡ SquadHub</Text>
+        <Text style={styles.brand}>⚡ {t("auth.brand")}</Text>
         <CompactLanguageToggle />
       </View>
 
