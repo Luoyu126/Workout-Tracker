@@ -12,6 +12,18 @@ export function normalizeAuthCredentials(email: string, password: string): SignI
   };
 }
 
+export function normalizePasswordChange(password: string, confirmation: string): string | "required" | "mismatch" {
+  const normalizedPassword = password.trim();
+  const normalizedConfirmation = confirmation.trim();
+  if (normalizedPassword.length === 0 || normalizedConfirmation.length === 0) {
+    return "required";
+  }
+  if (normalizedPassword !== normalizedConfirmation) {
+    return "mismatch";
+  }
+  return normalizedPassword;
+}
+
 export function normalizeProfileInput(name: string, studentId: string, avatarUrl = ""): SyncProfileInput | null {
   const normalizedName = name.trim();
   if (normalizedName.length === 0) {

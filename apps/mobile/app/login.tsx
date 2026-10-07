@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { CompactLanguageToggle } from "@/components/LanguageToggle";
 import { Button, Screen, TextField } from "@/components/ui";
-import type { SyncProfileInput } from "@/features/auth/api";
+import { resetInitialPassword, type SyncProfileInput } from "@/features/auth/api";
 import { AuthCallbackError } from "@/features/auth/callback";
 import { normalizeAuthCredentials, normalizeProfileInput } from "@/features/auth/validation";
 import { apiConfig } from "@/lib/api/client";
@@ -66,6 +66,32 @@ export default function LoginScreen() {
       if (result === "needsProfile") {
         setMessage(t("auth.signInNeedsProfile"));
       }
+    } catch (error) {
+      setMessage(formatApiError(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResetInitialPassword() {
+    if (isSubmitting) {
+      return;
+    }
+    const normalizedEmail = email.trim();
+    if (normalizedEmail.length === 0) {
+      setMessage(t("auth.emailRequired"));
+      return;
+    }
+    if (!apiConfig.isConfigured || apiConfig.isMalformed) {
+      setMessage(t("auth.apiConfigMissing"));
+      return;
+    }
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await resetInitialPassword(normalizedEmail);
+      setPassword("");
+      setMessage(t("auth.passwordReset"));
     } catch (error) {
       setMessage(formatApiError(error, t));
     } finally {
@@ -280,6 +306,17 @@ export default function LoginScreen() {
           </Text>
         </Text>
       ) : null}
+      {mode === "signIn" && !isCompletingProfile && !hasSessionError ? (
+        <Text style={styles.switchText}>
+          {t("auth.forgotPassword")}{" "}
+          <Text
+            style={[styles.switchLink, isSubmitting && styles.disabledLink]}
+            onPress={() => void handleResetInitialPassword()}
+          >
+            {t("auth.resetPassword")}
+          </Text>
+        </Text>
+      ) : null}
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </Screen>
@@ -322,6 +359,9 @@ const styles = StyleSheet.create({
   switchLink: {
     color: colors.accentSoft,
     fontWeight: "800"
+  },
+  disabledLink: {
+    opacity: 0.5
   },
   message: {
     color: colors.muted,

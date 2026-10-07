@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { normalizeAuthCredentials, normalizeProfileInput } from "../src/features/auth/validation";
+import { normalizeAuthCredentials, normalizePasswordChange, normalizeProfileInput } from "../src/features/auth/validation";
 
 describe("auth profile validation", () => {
   test("normalizes auth credentials", () => {
@@ -26,6 +26,12 @@ describe("auth profile validation", () => {
       student_id: null,
       avatar_url: null
     });
+  });
+
+  test("normalizes a confirmed password change and rejects blanks or mismatches", () => {
+    expect(normalizePasswordChange(" Password123 ", "Password123")).toBe("Password123");
+    expect(normalizePasswordChange("   ", "Password123")).toBe("required");
+    expect(normalizePasswordChange("Password123", "different")).toBe("mismatch");
   });
 
   test("rejects blank profile names", () => {

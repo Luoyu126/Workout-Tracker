@@ -8,7 +8,10 @@ const errorCodeTranslations: Partial<Record<string, TranslationKey>> = {
   DUPLICATE_MEMBERSHIP: "common.duplicateMembership",
   JOIN_REQUEST_PENDING: "common.joinRequestPending",
   LAST_ADMIN_REQUIRED: "common.lastAdminRequired",
-  MEMBER_NOT_ELIGIBLE: "common.memberNotEligible"
+  MEMBER_NOT_ELIGIBLE: "common.memberNotEligible",
+  AUTH_ACCOUNT_NOT_FOUND: "common.authAccountNotFound",
+  PASSWORD_RESET_UNAVAILABLE: "common.passwordResetUnavailable",
+  PASSWORD_RESET_FAILED: "common.passwordResetFailed"
 };
 
 const errorMessageTranslations: Partial<Record<string, TranslationKey>> = {

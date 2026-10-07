@@ -1,14 +1,25 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.common.auth import AuthClaims, get_auth_claims
 from app.common.database import get_db
 from app.common.dependencies import current_user
 from app.models import User
-from app.users.schemas import UserRead, UserSyncRequest, UserUpdateRequest
-from app.users.service import sync_user, update_user_profile
+from app.users.schemas import (
+    ResetInitialPasswordRequest,
+    UserRead,
+    UserSyncRequest,
+    UserUpdateRequest,
+)
+from app.users.service import reset_initial_password, sync_user, update_user_profile
 
 router = APIRouter(prefix="/api/v1", tags=["users"])
+
+
+@router.post("/auth/reset-initial-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password_to_initial(payload: ResetInitialPasswordRequest) -> Response:
+    reset_initial_password(payload.email)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/auth/sync", response_model=UserRead)

@@ -70,6 +70,28 @@ export async function signOut() {
   }
 }
 
+export async function resetInitialPassword(email: string) {
+  const normalizedEmail = email.trim();
+  if (normalizedEmail.length === 0) {
+    throw new AuthValidationError("Email is required");
+  }
+  await apiRequest<void>("/api/v1/auth/reset-initial-password", {
+    method: "POST",
+    body: { email: normalizedEmail }
+  });
+}
+
+export async function updatePassword(password: string) {
+  const normalizedPassword = password.trim();
+  if (normalizedPassword.length === 0) {
+    throw new AuthValidationError("Password is required");
+  }
+  const { error } = await supabase.auth.updateUser({ password: normalizedPassword });
+  if (error) {
+    throw error;
+  }
+}
+
 export function syncProfile(input: SyncProfileInput) {
   return apiRequest<UserProfile>("/api/v1/auth/sync", {
     method: "POST",

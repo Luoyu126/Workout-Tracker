@@ -1,3 +1,4 @@
+import { isAuthWeakPasswordError } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -8,10 +9,11 @@ import { Avatar, Badge, Button, Card, ListRow, Screen, TextField } from "@/compo
 import {
   getMyProfile,
   syncProfile,
+  updatePassword,
   updateProfile,
   type UserProfile
 } from "@/features/auth/api";
-import { normalizeProfileInput } from "@/features/auth/validation";
+import { normalizePasswordChange, normalizeProfileInput } from "@/features/auth/validation";
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
@@ -34,6 +36,9 @@ export default function ProfileTabScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useTransientFeedback(isSubmitting || loadState.status === "loading");
   const [editing, setEditing] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [passwordError, setPasswordError] = useTransientFeedback<boolean>(isSubmitting || loadState.status === "loading");
 
   async function handleLoadProfile() {
     if (isSubmitting) {
@@ -106,6 +111,38 @@ export default function ProfileTabScreen() {
       setMessage(t("profile.updated"));
     } catch (error) {
       setMessage(formatApiError(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (isSubmitting) {
+      return;
+    }
+    setPasswordError(null);
+    const nextPassword = normalizePasswordChange(newPassword, passwordConfirmation);
+    if (nextPassword === "required") {
+      setMessage(t("profile.passwordRequired"));
+      return;
+    }
+    if (nextPassword === "mismatch") {
+      setMessage(t("auth.passwordMismatch"));
+      return;
+    }
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await updatePassword(nextPassword);
+      setNewPassword("");
+      setPasswordConfirmation("");
+      setMessage(t("profile.passwordUpdated"));
+    } catch (error) {
+      if (isAuthWeakPasswordError(error)) {
+        setPasswordError(true);
+      } else {
+        setMessage(formatApiError(error, t));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -215,6 +252,38 @@ export default function ProfileTabScreen() {
             variant="secondary"
             onPress={() => void handleSyncProfile()}
           />
+          <Text style={styles.sectionTitle}>{t("profile.changePassword")}</Text>
+          <Text style={styles.meta}>{t("profile.changePasswordHint")}</Text>
+          <TextField
+            autoCapitalize="none"
+            autoComplete="password"
+            autoCorrect={false}
+            label={t("auth.newPassword")}
+            labelError={passwordError ? t("auth.passwordHint") : undefined}
+            onChangeText={(value) => {
+              setNewPassword(value);
+              setPasswordError(null);
+            }}
+            secureTextEntry
+            textContentType="newPassword"
+            value={newPassword}
+          />
+          <TextField
+            autoCapitalize="none"
+            autoComplete="password"
+            autoCorrect={false}
+            label={t("auth.confirmPassword")}
+            onChangeText={setPasswordConfirmation}
+            secureTextEntry
+            textContentType="newPassword"
+            value={passwordConfirmation}
+          />
+          <Button
+            disabled={isSubmitting}
+            label={t("profile.savePassword")}
+            variant="secondary"
+            onPress={() => void handleChangePassword()}
+          />
         </Card>
       ) : null}
 
@@ -254,6 +323,11 @@ const styles = StyleSheet.create({
   meta: {
     color: colors.muted,
     ...typography.caption
+  },
+  sectionTitle: {
+    color: colors.text,
+    marginTop: spacing.sm,
+    ...typography.titleSm
   },
   tags: {
     flexDirection: "row",

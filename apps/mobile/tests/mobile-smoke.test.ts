@@ -411,6 +411,10 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("auth.signInNeedsProfile");
     expect(source).toContain("auth.nameRequired");
     expect(source).toContain("auth.credentialsRequired");
+    expect(source).toContain("auth.resetPassword");
+    expect(source).toContain("auth.passwordReset");
+    expect(source).toContain("resetInitialPassword(normalizedEmail)");
+    expect(functionBody(source, "handleResetInitialPassword")).toContain("if (isSubmitting)");
     expect(source).toContain("auth.supabaseConfigMissing");
     expect(source).toContain("supabaseConfig.isConfigured");
     expect(source).toContain("auth.apiConfigMissing");
@@ -451,10 +455,15 @@ describe("mobile MVP smoke", () => {
     expect(source).toContain("autoCorrect={false}");
     expect(source).toContain("syncProfile(profileInput)");
     expect(source).toContain("updateProfile(profileInput)");
+    expect(source).toContain("normalizePasswordChange");
+    expect(source).toContain("updatePassword(nextPassword)");
+    expect(source).toContain("profile.changePassword");
+    expect(source).toContain("profile.passwordUpdated");
+    expect(source).toContain('secureTextEntry');
     expect(source).toContain('router.push("/teams")');
     expect(source).toContain("home.openTeams");
     expect(source).not.toContain("profile.notificationSettings");
-    for (const handlerName of ["handleSyncProfile", "handleLoadProfile", "handleUpdateProfile", "handleSignOut"]) {
+    for (const handlerName of ["handleSyncProfile", "handleLoadProfile", "handleUpdateProfile", "handleChangePassword", "handleSignOut"]) {
       expect(functionBody(source, handlerName)).toContain("if (isSubmitting)");
     }
     expect(source).toContain("Screen");

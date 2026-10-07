@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = Field(default="authenticated", alias="SUPABASE_JWT_AUDIENCE")
     supabase_jwt_jwks_url: str | None = Field(default=None, alias="SUPABASE_JWT_JWKS_URL")
     supabase_jwt_secret: str | None = Field(default=None, alias="SUPABASE_JWT_SECRET")
+    supabase_secret_key: str | None = Field(default=None, alias="SUPABASE_SECRET_KEY")
+    initial_login_password: str | None = Field(default=None, alias="INITIAL_LOGIN_PASSWORD")
     bootstrap_org_name: str = Field(default="Campus Club", alias="BOOTSTRAP_ORG_NAME")
     bootstrap_org_slug: str = Field(default="campus-club", alias="BOOTSTRAP_ORG_SLUG")
     bootstrap_team_name: str = Field(default="Campus Football", alias="BOOTSTRAP_TEAM_NAME")
@@ -86,6 +88,14 @@ class Settings(BaseSettings):
     @property
     def jwt_issuer(self) -> str | None:
         return self._non_blank(self.supabase_jwt_issuer)
+
+    @property
+    def auth_admin_key(self) -> str | None:
+        return self._non_blank(self.supabase_secret_key)
+
+    @property
+    def normalized_initial_login_password(self) -> str | None:
+        return self._non_blank(self.initial_login_password)
 
     @property
     def cors_origins(self) -> list[str]:

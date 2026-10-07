@@ -50,6 +50,7 @@ export const apiSchemaNames = [
   "RedemptionCreateRequest",
   "RedemptionRead",
   "RedemptionStatus",
+  "ResetInitialPasswordRequest",
   "SignupBoardRow",
   "SignupStatus",
   "StoreItemCreateRequest",
@@ -72,6 +73,17 @@ export const apiSchemaNames = [
 ] as const;
 
 export const apiEndpoints = [
+  {
+    "operationId": "reset_password_to_initial_api_v1_auth_reset_initial_password_post",
+    "method": "POST",
+    "path": "/api/v1/auth/reset-initial-password",
+    "requestBody": "ResetInitialPasswordRequest",
+    "response": "void",
+    "statusCodes": [
+      204,
+      422
+    ]
+  },
   {
     "operationId": "sync_current_user_api_v1_auth_sync_post",
     "method": "POST",

@@ -21,6 +21,15 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResetInitialPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class UserSyncRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     student_id: str | None = Field(default=None, max_length=64)

@@ -396,6 +396,30 @@ PATCH /api/v1/users/me
 
 客户端注册、登录、刷新和退出直接使用 Supabase Auth SDK，不由 FastAPI 保存密码。
 
+### 6.5 重置为初始密码
+
+POST /api/v1/auth/reset-initial-password
+
+无需认证。把请求邮箱对应的 Supabase Auth 登录密码恢复为服务器环境变量 `INITIAL_LOGIN_PASSWORD`。响应和错误都不返回该密码。业务数据库不保存密码。
+
+请求：
+
+~~~json
+{
+  "email": "player@example.com"
+}
+~~~
+
+成功返回 `204`，没有响应体。
+
+错误：
+
+- `400 AUTH_ACCOUNT_NOT_FOUND`：该邮箱没有登录账号。
+- `422 VALIDATION_ERROR`：邮箱格式无效。
+- `502 PASSWORD_RESET_FAILED`：登录服务更新失败。
+- `503 PASSWORD_RESET_UNAVAILABLE`：未配置 `INITIAL_LOGIN_PASSWORD`、`SUPABASE_SECRET_KEY` 或 `SUPABASE_JWT_ISSUER`。
+
+
 邮箱注册必须在 Supabase Auth 开启 `Confirm Email`，未验证用户不能通过密码登录。客户端注册通过 SDK 的 `options.emailRedirectTo` 指定 Web `/login` 返回地址；默认值为 `https://workout-tracker-web-d05k.onrender.com/login`，可由构建环境 `EXPO_PUBLIC_AUTH_REDIRECT_URL` 覆盖，并必须加入 Supabase Redirect URLs。
 
 确认链接由 Supabase 验证；Web `/login` 接收现有 implicit flow 的 URL fragment，通过 SDK `setSession` 建立会话并清除 fragment。认证初始化完成后调用 `GET /api/v1/users/me`；`USER_NOT_SYNCED` 转入补资料流程，提交现有 `POST /api/v1/auth/sync`，其余失败沿用既有错误契约。无效回调不得视为验证或登录成功。

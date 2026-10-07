@@ -3,9 +3,15 @@ from sqlalchemy.orm import Session
 from app.common.auth import AuthClaims
 from app.common.enums import UserStatus
 from app.common.transactions import transaction_boundary
+from app.config import Settings, get_settings
 from app.models import User
-from app.users import repository
-from app.users.errors import DisabledUserError, UserNotSyncedError
+from app.users import auth_admin, repository
+from app.users.errors import (
+    AuthAccountNotFoundError,
+    DisabledUserError,
+    PasswordResetUnavailableError,
+    UserNotSyncedError,
+)
 from app.users.schemas import UserSyncRequest, UserUpdateRequest
 
 
@@ -40,6 +46,19 @@ def sync_user(session: Session, claims: AuthClaims, payload: UserSyncRequest) ->
             user.avatar_url = payload.avatar_url
     repository.refresh(session, user)
     return user
+
+
+def reset_initial_password(email: str, settings: Settings | None = None) -> None:
+    resolved_settings = settings or get_settings()
+    password = resolved_settings.normalized_initial_login_password
+    admin_key = resolved_settings.auth_admin_key
+    issuer = resolved_settings.jwt_issuer
+    if password is None or admin_key is None or issuer is None:
+        raise PasswordResetUnavailableError()
+    user_id = auth_admin.find_user_id_by_email(issuer, admin_key, email)
+    if user_id is None:
+        raise AuthAccountNotFoundError()
+    auth_admin.update_user_password(issuer, admin_key, user_id, password)
 
 
 def update_user_profile(session: Session, user: User, payload: UserUpdateRequest) -> User:

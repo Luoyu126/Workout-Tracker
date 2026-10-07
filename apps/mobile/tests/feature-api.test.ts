@@ -10,6 +10,7 @@ const signInWithPasswordMock = vi.hoisted(() =>
   vi.fn<() => Promise<AuthResult>>(async () => ({ data: { session: authSession }, error: null }))
 );
 const signOutMock = vi.hoisted(() => vi.fn<() => Promise<{ error: Error | null }>>(async () => ({ error: null })));
+const updateUserMock = vi.hoisted(() => vi.fn(async () => ({ data: { user: {} }, error: null })));
 
 vi.mock("@/lib/api/client", () => ({
   apiRequest: apiRequestMock
@@ -20,7 +21,8 @@ vi.mock("@/lib/supabase/client", () => ({
     auth: {
       signUp: signUpMock,
       signInWithPassword: signInWithPasswordMock,
-      signOut: signOutMock
+      signOut: signOutMock,
+      updateUser: updateUserMock
     }
   }
 }));
@@ -31,6 +33,7 @@ describe("feature API contracts", () => {
     signUpMock.mockReset().mockResolvedValue({ data: { session: authSession }, error: null });
     signInWithPasswordMock.mockReset().mockResolvedValue({ data: { session: authSession }, error: null });
     signOutMock.mockClear();
+    updateUserMock.mockReset().mockResolvedValue({ data: { user: {} }, error: null });
   });
 
   afterEach(() => {
@@ -545,16 +548,18 @@ describe("feature API contracts", () => {
   });
 
   test("auth APIs delegate to Supabase and backend endpoints", async () => {
-    const { getMyProfile, signIn, signOut, signUp, syncProfile, updateProfile } = await import(
+    const { getMyProfile, resetInitialPassword, signIn, signOut, signUp, syncProfile, updatePassword, updateProfile } = await import(
       "../src/features/auth/api"
     );
 
     await expect(signUp({ email: " player@example.com ", password: " secret " })).resolves.toBe(authSession);
     await expect(signIn({ email: " player@example.com ", password: " secret " })).resolves.toBe(authSession);
     await signOut();
+    await updatePassword(" Password123 ");
     syncProfile({ name: " 小陈 ", student_id: " 9 ", avatar_url: "   " });
     updateProfile({ name: " 小陈 2 ", student_id: "   ", avatar_url: " https://cdn.example.test/avatar.png " });
     getMyProfile();
+    await resetInitialPassword(" player@example.com ");
 
     expect(signUpMock).toHaveBeenCalledWith({
       email: "player@example.com",
@@ -566,6 +571,7 @@ describe("feature API contracts", () => {
       password: "secret"
     });
     expect(signOutMock).toHaveBeenCalledWith();
+    expect(updateUserMock).toHaveBeenCalledWith({ password: "Password123" });
     expect(apiRequestMock).toHaveBeenNthCalledWith(1, "/api/v1/auth/sync", {
       method: "POST",
       body: { name: "小陈", student_id: "9", avatar_url: null }
@@ -575,16 +581,23 @@ describe("feature API contracts", () => {
       body: { name: "小陈 2", student_id: null, avatar_url: "https://cdn.example.test/avatar.png" }
     });
     expect(apiRequestMock).toHaveBeenNthCalledWith(3, "/api/v1/users/me");
+    expect(apiRequestMock).toHaveBeenNthCalledWith(4, "/api/v1/auth/reset-initial-password", {
+      method: "POST",
+      body: { email: "player@example.com" }
+    });
   });
 
   test("auth APIs reject blank credentials before calling Supabase", async () => {
-    const { AuthValidationError, signIn, signUp } = await import("../src/features/auth/api");
+    const { AuthValidationError, resetInitialPassword, signIn, signUp, updatePassword } = await import("../src/features/auth/api");
 
     await expect(signUp({ email: "   ", password: "secret" })).rejects.toBeInstanceOf(AuthValidationError);
     await expect(signIn({ email: "player@example.com", password: "   " })).rejects.toBeInstanceOf(AuthValidationError);
+    await expect(updatePassword("   ")).rejects.toBeInstanceOf(AuthValidationError);
+    await expect(resetInitialPassword("   ")).rejects.toBeInstanceOf(AuthValidationError);
 
     expect(signUpMock).not.toHaveBeenCalled();
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
+    expect(updateUserMock).not.toHaveBeenCalled();
   });
 
   test("sign-up exposes an email-verification session gap", async () => {
