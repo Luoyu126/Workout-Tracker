@@ -22,6 +22,11 @@ vi.mock("react", async (original) => ({
   useCallback: (fn: unknown) => fn
 }));
 vi.mock("expo-router", () => ({ useFocusEffect: (fn: () => () => void) => { h.focus = fn; } }));
+// These role/request tests keep feedback state; timer behavior is covered separately.
+vi.mock("@/lib/ui/useTransientFeedback", async () => {
+  const { useState } = await import("react");
+  return { useTransientFeedback: () => useState(null) };
+});
 vi.mock("react-native", () => ({ Text: "text", View: "view", StyleSheet: { create: (value: unknown) => value } }));
 vi.mock("@/components/ui", () => ({ Button: "button", Card: "card", EmptyState: "empty" }));
 vi.mock("@/components/ScreenState", () => ({ ScreenState: "state" }));

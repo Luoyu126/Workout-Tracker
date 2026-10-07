@@ -8,6 +8,7 @@ import { getJoinRequests, updateTeamMember, type Membership } from "@/features/t
 import { formatApiError } from "@/lib/api/errors";
 import type { LoadState } from "@/lib/api/loadState";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/tokens";
 
@@ -16,7 +17,7 @@ export function InboxJoinRequests({ teamId, refreshVersion }: { teamId: string; 
   const [requests, setRequests] = useState<Membership[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{ message: string; success: boolean } | null>(null);
+  const [feedback, setFeedback] = useTransientFeedback<{ message: string; success: boolean }>(isSubmitting || loadState.status === "loading");
   const submitting = useRef(false);
   const active = useRef(false);
   const version = useRef(0);
