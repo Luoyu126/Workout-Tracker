@@ -414,11 +414,17 @@ def test_signup_list_includes_current_members_without_writing_defaults(session: 
     assert not session.new and not session.dirty
 
 
-def test_signup_list_rejects_members_outsiders_and_inactive_admins(session: Session) -> None:
+def test_signup_list_allows_active_members_and_rejects_outsiders(session: Session) -> None:
     team, admin, member = _seed_team(session)
     event = post_event(team.id, _payload(), admin, session)
-    _, other_admin, _ = _seed_team(session)
-    for actor in [member, other_admin]:
+    session.add(EventSignup(event_id=event.id, user_id=member.id, status=SignupStatus.going))
+    session.commit()
+    admin_rows = read_signups(event.id, None, admin, session)
+    member_rows = read_signups(event.id, None, member, session)
+    assert member_rows == admin_rows
+    assert any(row["user_id"] == member.id and row["status"] == SignupStatus.going for row in member_rows)
+    _, other_admin, other_member = _seed_team(session)
+    for actor in [other_admin, other_member]:
         with pytest.raises(HTTPException) as error:
             read_signups(event.id, None, actor, session)
         assert error.value.status_code == 403
@@ -430,4 +436,13 @@ def test_signup_list_rejects_members_outsiders_and_inactive_admins(session: Sess
     session.commit()
     with pytest.raises(HTTPException) as error:
         read_signups(event.id, None, admin, session)
+    assert error.value.status_code == 403
+    member_membership = session.scalar(select(TeamMembership).where(
+        TeamMembership.team_id == team.id, TeamMembership.user_id == member.id,
+    ))
+    assert member_membership is not None
+    member_membership.status = MembershipStatus.inactive
+    session.commit()
+    with pytest.raises(HTTPException) as error:
+        read_signups(event.id, None, member, session)
     assert error.value.status_code == 403

@@ -225,6 +225,14 @@ export default function HomeScreen() {
               onPress={openNextEventDetail}
               style={{ flex: 1 }}
             />
+            {canParticipate ? (
+              <Button
+                label={t("events.chainList")}
+                variant="secondary"
+                onPress={() => router.push({ pathname: "/events/[eventId]/chain", params: { eventId: nextEvent.id } })}
+                style={{ flex: 1 }}
+              />
+            ) : null}
           </View>
           {home?.current_membership.role === "admin" ? (
             <Button

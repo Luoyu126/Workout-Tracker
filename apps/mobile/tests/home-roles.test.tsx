@@ -163,6 +163,18 @@ test("admin signup-list button follows event details and opens the current event
   expect(signupIndex).toBeGreaterThan(detailIndex);
   buttons[signupIndex].onPress?.();
   expect(h.push).toHaveBeenCalledWith({ pathname: "/events/[eventId]/signups", params: { eventId: "event" } });
+  expect(text(render())).not.toContain("events.chainList");
   h.role = "member";
+  expect(text(render())).not.toContain("events.signupList");
+});
+
+test("member chain-list button follows event details and opens the current event", () => {
+  h.role = "member";
+  const buttons = nodes(render()).filter((node) => node.label);
+  const detailIndex = buttons.findIndex((node) => node.label === "events.detail");
+  const chainIndex = buttons.findIndex((node) => node.label === "events.chainList");
+  expect(chainIndex).toBeGreaterThan(detailIndex);
+  buttons[chainIndex].onPress?.();
+  expect(h.push).toHaveBeenCalledWith({ pathname: "/events/[eventId]/chain", params: { eventId: "event" } });
   expect(text(render())).not.toContain("events.signupList");
 });

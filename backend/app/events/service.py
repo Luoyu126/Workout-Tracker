@@ -588,7 +588,7 @@ def _signup_read(signup: EventSignup | None, signup_user: User, event_id: UUID) 
 
 def list_signups(session: Session, event_id: UUID, user: User, status: SignupStatus | None) -> list[dict[str, object]]:
     event = _get_event(session, event_id)
-    _require_event_admin(session, event, user, "events.list_signups")
+    _ensure_event_visible(session, event, user)
     rows = [
         _signup_read(signup, signup_user, event.id)
         for signup, signup_user in repository.list_signups_with_users(session, event_id, event.team_id)
