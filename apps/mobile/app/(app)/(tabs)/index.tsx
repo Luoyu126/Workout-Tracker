@@ -7,12 +7,19 @@ import { CompactLanguageToggle } from "@/components/LanguageToggle";
 import { ScreenState } from "@/components/ScreenState";
 import { Avatar, Badge, Button, Card, EmptyState, Screen } from "@/components/ui";
 import { getMySignup, updateMySignup, type SignupStatus } from "@/features/events/api";
+import type { TeamHome } from "@/features/teams/api";
 import { formatApiError } from "@/lib/api/errors";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { useTransientFeedback } from "@/lib/ui/useTransientFeedback";
 import { useTeamContext } from "@/providers/TeamProvider";
 import { colors } from "@/theme/colors";
 import { radius, spacing, typography } from "@/theme/tokens";
+
+type UpcomingEvent = TeamHome["upcoming_events"][number];
+
+function isEventInProgress(event: UpcomingEvent, now: number) {
+  return new Date(event.start_time).getTime() <= now && now < new Date(event.end_time).getTime();
+}
 
 function formatEventWhen(iso: string, locale: string) {
   try {
@@ -34,12 +41,13 @@ export default function HomeScreen() {
   const { teams, home, selectedTeamId, isLoading, error, loadState, refresh, selectTeam } = useTeamContext();
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [isSignupMessageSuccess, setIsSignupMessageSuccess] = useState(false);
-  const [isSigningUp, setIsSigningUp] = useState(false);
-  const [signupMessage, setSignupMessage] = useTransientFeedback(isSigningUp || isLoading || loadState.status === "loading");
-  const [nextSignupStatus, setNextSignupStatus] = useState<SignupStatus | null>(null);
+  const [signingUpEventId, setSigningUpEventId] = useState<string | null>(null);
+  const [signupMessage, setSignupMessage] = useTransientFeedback(signingUpEventId !== null || isLoading || loadState.status === "loading");
+  const [signupStatuses, setSignupStatuses] = useState<Record<string, SignupStatus | null>>({});
   const canParticipate = home?.current_membership.role === "member";
   const hasFocused = useRef(false);
   const refreshRef = useRef(refresh);
+  const upcomingEventsRef = useRef<UpcomingEvent[]>([]);
 
   useEffect(() => {
     refreshRef.current = refresh;
@@ -61,50 +69,51 @@ export default function HomeScreen() {
     return `${Math.round((home.signup_summary.going / home.signup_summary.total) * 100)}%`;
   }, [home]);
 
-  const nextEvent = home?.upcoming_events[0] ?? null;
+  const upcomingEvents = home?.upcoming_events ?? [];
+  upcomingEventsRef.current = upcomingEvents;
+  const upcomingEventIds = upcomingEvents.map((event) => event.id).join(",");
   const now = Date.now();
-  const isEventInProgress = nextEvent !== null
-    && new Date(nextEvent.start_time).getTime() <= now
-    && now < new Date(nextEvent.end_time).getTime();
   const message = signupMessage ?? (error ? formatApiError(error, t) : null);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
 
-      async function loadNextSignup() {
-        if (!nextEvent?.id || !canParticipate) {
-          setNextSignupStatus(null);
+      async function loadSignups() {
+        const events = upcomingEventsRef.current;
+        if (!canParticipate || events.length === 0) {
+          setSignupStatuses({});
           return;
         }
-        try {
-          const signup = await getMySignup(nextEvent.id);
-          if (!cancelled) {
-            setNextSignupStatus(signup.status);
+        const entries = await Promise.all(events.map(async (event) => {
+          try {
+            const signup = await getMySignup(event.id);
+            return [event.id, signup.status] as const;
+          } catch {
+            return [event.id, null] as const;
           }
-        } catch {
-          if (!cancelled) {
-            setNextSignupStatus(null);
-          }
+        }));
+        if (!cancelled) {
+          setSignupStatuses(Object.fromEntries(entries));
         }
       }
 
-      void loadNextSignup();
+      void loadSignups();
       return () => {
         cancelled = true;
       };
-    }, [nextEvent?.id, home, canParticipate])
+    }, [upcomingEventIds, home, canParticipate])
   );
 
-  async function handleQuickGoing() {
-    if (!nextEvent || !canParticipate) {
+  async function handleQuickGoing(eventId: string) {
+    if (!canParticipate) {
       return;
     }
-    setIsSigningUp(true);
+    setSigningUpEventId(eventId);
     setSignupMessage(null);
     try {
-      await updateMySignup(nextEvent.id, "going", null);
-      setNextSignupStatus("going");
+      await updateMySignup(eventId, "going", null);
+      setSignupStatuses({ ...signupStatuses, [eventId]: "going" });
       setIsSignupMessageSuccess(true);
       setSignupMessage(t("events.signupSaved"));
       await refresh();
@@ -112,15 +121,12 @@ export default function HomeScreen() {
       setIsSignupMessageSuccess(false);
       setSignupMessage(formatApiError(signupError, t));
     } finally {
-      setIsSigningUp(false);
+      setSigningUpEventId(null);
     }
   }
 
-  function openNextEventDetail() {
-    if (!nextEvent) {
-      return;
-    }
-    router.push({ pathname: "/events/[eventId]", params: { eventId: nextEvent.id } });
+  function openEventDetail(eventId: string) {
+    router.push({ pathname: "/events/[eventId]", params: { eventId } });
   }
 
   return (
@@ -175,74 +181,78 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.sectionLabel}>{t("home.nextEvent")}</Text>
-      {nextEvent ? (
-        <Card accentBorder>
-          <View style={styles.eventHeader}>
-            <View style={styles.eventTypeGroup}>
-              <Badge
-                label={nextEvent.type === "match" ? t("events.match") : t("events.training")}
-                tone={nextEvent.type === "match" ? "purple" : "accent"}
+      {upcomingEvents.length > 0 ? upcomingEvents.map((event, index) => {
+        const signupStatus = signupStatuses[event.id] ?? null;
+        const inProgress = isEventInProgress(event, now) && event.type !== "other";
+        return (
+          <Card key={event.id} accentBorder={index === 0}>
+            <View style={styles.eventHeader}>
+              <View style={styles.eventTypeGroup}>
+                <Badge
+                  label={event.type === "match" ? t("events.match") : t("events.training")}
+                  tone={event.type === "match" ? "purple" : "accent"}
+                />
+                {inProgress ? (
+                  <Text style={styles.eventInProgress}>
+                    {t(event.type === "match" ? "home.matchInProgress" : "home.trainingInProgress")}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.eventWhen}>{formatEventWhen(event.start_time, locale)}</Text>
+            </View>
+            <Text style={styles.eventTitle}>{event.title}</Text>
+            <Text style={styles.eventMeta}>
+              <Ionicons color={colors.muted} name="location-outline" size={14} />{" "}
+              {event.location ?? t("events.location")}
+            </Text>
+            <View style={styles.eventActions}>
+              {canParticipate && (signupStatus === "going" ? (
+                <Button
+                  label={t("home.confirmedGoing")}
+                  variant="secondary"
+                  onPress={() => openEventDetail(event.id)}
+                  style={{ flex: 1 }}
+                />
+              ) : signupStatus === "not_going" ? (
+                <Button
+                  label={t("home.confirmedLeave")}
+                  variant="ghost"
+                  onPress={() => openEventDetail(event.id)}
+                  style={{ flex: 1 }}
+                />
+              ) : (
+                <Button
+                  label={t("home.confirmGoing")}
+                  disabled={isLoading || signingUpEventId !== null}
+                  onPress={() => void handleQuickGoing(event.id)}
+                  style={{ flex: 1 }}
+                />
+              ))}
+              <Button
+                label={t("events.detail")}
+                variant="secondary"
+                onPress={() => openEventDetail(event.id)}
+                style={{ flex: 1 }}
               />
-              {isEventInProgress && nextEvent.type !== "other" ? (
-                <Text style={styles.eventInProgress}>
-                  {t(nextEvent.type === "match" ? "home.matchInProgress" : "home.trainingInProgress")}
-                </Text>
+              {canParticipate ? (
+                <Button
+                  label={t("events.chainList")}
+                  variant="secondary"
+                  onPress={() => router.push({ pathname: "/events/[eventId]/chain", params: { eventId: event.id } })}
+                  style={{ flex: 1 }}
+                />
               ) : null}
             </View>
-            <Text style={styles.eventWhen}>{formatEventWhen(nextEvent.start_time, locale)}</Text>
-          </View>
-          <Text style={styles.eventTitle}>{nextEvent.title}</Text>
-          <Text style={styles.eventMeta}>
-            <Ionicons color={colors.muted} name="location-outline" size={14} />{" "}
-            {nextEvent.location ?? t("events.location")}
-          </Text>
-          <View style={styles.eventActions}>
-            {canParticipate && (nextSignupStatus === "going" ? (
+            {home?.current_membership.role === "admin" ? (
               <Button
-                label={t("home.confirmedGoing")}
+                label={t("events.signupList")}
                 variant="secondary"
-                onPress={openNextEventDetail}
-                style={{ flex: 1 }}
-              />
-            ) : nextSignupStatus === "not_going" ? (
-              <Button
-                label={t("home.confirmedLeave")}
-                variant="ghost"
-                onPress={openNextEventDetail}
-                style={{ flex: 1 }}
-              />
-            ) : (
-              <Button
-                label={t("home.confirmGoing")}
-                disabled={isLoading || isSigningUp}
-                onPress={() => void handleQuickGoing()}
-                style={{ flex: 1 }}
-              />
-            ))}
-            <Button
-              label={t("events.detail")}
-              variant="secondary"
-              onPress={openNextEventDetail}
-              style={{ flex: 1 }}
-            />
-            {canParticipate ? (
-              <Button
-                label={t("events.chainList")}
-                variant="secondary"
-                onPress={() => router.push({ pathname: "/events/[eventId]/chain", params: { eventId: nextEvent.id } })}
-                style={{ flex: 1 }}
+                onPress={() => router.push({ pathname: "/events/[eventId]/signups", params: { eventId: event.id } })}
               />
             ) : null}
-          </View>
-          {home?.current_membership.role === "admin" ? (
-            <Button
-              label={t("events.signupList")}
-              variant="secondary"
-              onPress={() => router.push({ pathname: "/events/[eventId]/signups", params: { eventId: nextEvent.id } })}
-            />
-          ) : null}
-        </Card>
-      ) : loadState.status === "success" ? (
+          </Card>
+        );
+      }) : loadState.status === "success" ? (
         <EmptyState title={t("home.noNextEvent")} description={t("home.noDashboard")} />
       ) : null}
 

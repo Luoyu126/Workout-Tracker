@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ScreenState } from "@/components/ScreenState";
-import { Badge, Card, EmptyState, Screen, SegmentedControl } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Screen, SegmentedControl } from "@/components/ui";
 import {
   getTeamEvents,
   type EventStatus,
@@ -110,12 +110,11 @@ export default function EventsTabScreen() {
       />
 
       {events.map((event) => (
-        <Pressable
-          accessibilityRole="button"
-          key={event.id}
-          onPress={() => router.push({ pathname: "/events/[eventId]", params: { eventId: event.id } })}
-        >
-          <Card>
+        <Card key={event.id}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: "/events/[eventId]", params: { eventId: event.id } })}
+          >
             <View style={styles.rowBetween}>
               <Badge
                 label={t(`events.${event.type}`)}
@@ -126,8 +125,17 @@ export default function EventsTabScreen() {
             <Text style={styles.cardTitle}>{event.title}</Text>
             <Text style={styles.muted}>{new Date(event.start_time).toLocaleString()}</Text>
             {event.location ? <Text style={styles.muted}>{event.location}</Text> : null}
-          </Card>
-        </Pressable>
+          </Pressable>
+          {canManageEvents ? (
+            <View style={styles.signupAction}>
+              <Button
+                label={t("events.signupList")}
+                variant="secondary"
+                onPress={() => router.push({ pathname: "/events/[eventId]/signups", params: { eventId: event.id } })}
+              />
+            </View>
+          ) : null}
+        </Card>
       ))}
     </Screen>
   );
@@ -161,5 +169,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  signupAction: {
+    alignItems: "flex-end",
+    marginTop: spacing.sm
   }
 });

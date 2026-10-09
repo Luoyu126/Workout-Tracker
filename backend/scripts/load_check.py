@@ -210,7 +210,7 @@ def run_load_check() -> dict[str, object]:
         assert team_home["member_count"] == 32
         team_home_upcoming_events = cast(list[dict[str, Any]], team_home["upcoming_events"])
         team_home_signup_summary = cast(dict[str, int], team_home["signup_summary"])
-        assert len(team_home_upcoming_events) == 5
+        assert len(team_home_upcoming_events) == 13
         assert team_home_signup_summary["total"] == 12
 
         notifications = []

@@ -168,6 +168,43 @@ test("admin signup-list button follows event details and opens the current event
   expect(text(render())).not.toContain("events.signupList");
 });
 
+test("upcoming events stay earliest-first and each member card confirms only itself", async () => {
+  const sooner = { ...upcoming, id: "sooner", title: "Sooner training" };
+  const later = { ...upcoming, id: "later", title: "Later match", type: "match", start_time: "2099-09-11T10:00:00Z" };
+  h.events = [sooner, later];
+  h.role = "member";
+  h.signup.mockImplementation(async (eventId: string) => ({ status: eventId === "later" ? "maybe" : "going" }));
+  render();
+  await focus();
+  const ui = text(render());
+  expect(ui.indexOf("Sooner training")).toBeGreaterThanOrEqual(0);
+  expect(ui.indexOf("Sooner training")).toBeLessThan(ui.indexOf("Later match"));
+  expect(h.signup).toHaveBeenCalledWith("sooner");
+  expect(h.signup).toHaveBeenCalledWith("later");
+  const confirm = nodes(render()).filter((node) => node.label === "home.confirmGoing");
+  expect(confirm).toHaveLength(1);
+  confirm[0].onPress?.();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  expect(h.update).toHaveBeenCalledWith("later", "going", null);
+  expect(h.update).not.toHaveBeenCalledWith("sooner", "going", null);
+});
+
+test("admin signup buttons open each upcoming event in listed order", () => {
+  h.events = [
+    { ...upcoming, id: "sooner", title: "Sooner training" },
+    { ...upcoming, id: "later", title: "Later match", type: "match", start_time: "2099-09-11T10:00:00Z" }
+  ];
+  const ui = text(render());
+  expect(ui.indexOf("Sooner training")).toBeLessThan(ui.indexOf("Later match"));
+  const buttons = nodes(render()).filter((node) => node.label === "events.signupList");
+  expect(buttons).toHaveLength(2);
+  buttons[0].onPress?.();
+  buttons[1].onPress?.();
+  expect(h.push).toHaveBeenNthCalledWith(1, { pathname: "/events/[eventId]/signups", params: { eventId: "sooner" } });
+  expect(h.push).toHaveBeenNthCalledWith(2, { pathname: "/events/[eventId]/signups", params: { eventId: "later" } });
+  expect(text(render())).not.toContain("events.chainList");
+});
+
 test("member chain-list button follows event details and opens the current event", () => {
   h.role = "member";
   const buttons = nodes(render()).filter((node) => node.label);

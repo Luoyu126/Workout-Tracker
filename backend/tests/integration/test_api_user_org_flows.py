@@ -280,3 +280,43 @@ def test_team_home_returns_real_upcoming_signup_and_coin_aggregates(
         "total": 1,
     }
     assert home["coin_summary"] == {"balance": 15, "team_ledger_total": 35}
+
+
+def test_team_home_returns_every_upcoming_event_with_the_earliest_first(session: Session) -> None:
+    user = User(auth_id=uuid4(), name="列表用户", email="upcoming-user@example.com")
+    organization = Organization(name="Upcoming Org", slug=f"upcoming-org-{uuid4().hex[:8]}")
+    session.add_all([user, organization])
+    session.flush()
+    team = Team(organization_id=organization.id, name="Upcoming Team")
+    session.add(team)
+    session.flush()
+    session.add(TeamMembership(
+        team_id=team.id, user_id=user.id, role=MembershipRole.member, status=MembershipStatus.active,
+    ))
+    session.flush()
+
+    now = datetime.now(UTC)
+    session.add_all(
+        [
+            Event(
+                team_id=team.id, type=EventType.training, title=f"训练 {index}",
+                start_time=now + timedelta(days=6 - index),
+                end_time=now + timedelta(days=6 - index, hours=2),
+                status=EventStatus.published, created_by=user.id,
+            )
+            for index in range(6)
+        ] + [
+            Event(
+                team_id=team.id, type=EventType.training, title="已结束",
+                start_time=now - timedelta(days=2), end_time=now - timedelta(days=1),
+                status=EventStatus.published, created_by=user.id,
+            )
+        ]
+    )
+    session.commit()
+
+    home = read_team_home(team.id, user, session)
+
+    assert [event["title"] for event in home["upcoming_events"]] == [
+        "训练 5", "训练 4", "训练 3", "训练 2", "训练 1", "训练 0",
+    ]
